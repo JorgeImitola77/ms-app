@@ -1,0 +1,1 @@
+# Como no vamos a recibir un JSON con datos, simplemente tomaremos el numero de documento directamente desde la URL.

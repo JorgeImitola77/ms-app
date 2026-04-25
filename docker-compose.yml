@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # 1. CONTENEDOR DE LA BASE DE DATOS (Independiente)
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: gestion_personal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql # Ejecuta el script de las tablas al iniciar
+
+  # 2. MICROSERVICIO: CREAR
+  ms-crear:
+    build: ./microservicios/ms-crear
+    container_name: ms_crear
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./uploads:/app/uploads 
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+
+  # 3. MICROSERVICIO: MODIFICAR
+  ms-modificar:
+    build: ./microservicios/ms-modificar
+    container_name: ms_modificar
+    ports:
+      - "8002:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+
+  # 4. MICROSERVICIO: CONSULTAR (Diseñado para apagarse a demanda)
+  ms-consultar:
+    build: ./microservicios/ms-consultar
+    container_name: ms_consultar
+    ports:
+      - "8003:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+
+  # 5. MICROSERVICIO: BORRAR
+  ms-borrar:
+    build: ./microservicios/ms-borrar
+    container_name: ms_borrar
+    ports:
+      - "8004:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+
+  # 6. MICROSERVICIO: LOG
+  ms-log:
+    build: ./microservicios/ms-log
+    container_name: ms_log
+    ports:
+      - "8005:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+
+  # 7. AUTOMATIZADOR Y RAG: n8n
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n_rag
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - db
+
+# VOLÚMENES PERSISTENTES (Para no perder datos si se apaga Docker)
+volumes:
+  postgres_data:
+  n8n_data:
