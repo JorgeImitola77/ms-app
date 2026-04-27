@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import asyncpg
 from jose import jwt
 
-app = FastAPI(title="ExplorApp - Microservicio Crear (Auth0)")
+app = FastAPI(title="Microservicio Crear (Auth0)")
 auth_scheme = HTTPBearer()
 
 # CONFIGURACIÓN AUTH0 (Reemplazar con tus datos de Auth0)

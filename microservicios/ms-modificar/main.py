@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import asyncpg
 from schemas import PersonaUpdate
 
-app = FastAPI(title="ExplorApp - Microservicio Modificar (Auth0)")
+app = FastAPI(title="Microservicio Modificar (Auth0)")
 auth_scheme = HTTPBearer()
 DATABASE_URL = os.getenv("DATABASE_URL")
 

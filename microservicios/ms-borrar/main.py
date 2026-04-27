@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import asyncpg
 
-app = FastAPI(title="ExplorApp - Microservicio Borrar (Auth0)")
+app = FastAPI(title="Microservicio Borrar (Auth0)")
 auth_scheme = HTTPBearer()
 DATABASE_URL = os.getenv("DATABASE_URL")
 

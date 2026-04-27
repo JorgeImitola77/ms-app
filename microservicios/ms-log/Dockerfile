@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
-# Exponer el puerto (cada microservicio puede usar uno distinto internamente)
+# Exponer el puerto interno
 EXPOSE 8000
 
 # Comando para ejecutar la aplicación
