@@ -1,0 +1,115 @@
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+parts/
+sdist/
+wheels/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Virtualenv
+venv/
+env/
+ENV/
+.venv/
+.env.venv/
+
+# =========================
+# Node / Frontend
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm
+.yarn-integrity
+.pnp.*
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+.vite/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.turbo/
+
+# Vite
+*.local
+
+# =========================
+# Docker
+# =========================
+*.pid
+docker-compose.override.yml
+.docker/
+
+# =========================
+# Variables de entorno
+# =========================
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# =========================
+# Datos / Uploads del proyecto
+# =========================
+uploads/*
+!uploads/.gitkeep
+
+# n8n datos persistentes locales
+n8n/data/
+
+# =========================
+# Editores e IDEs
+# =========================
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
