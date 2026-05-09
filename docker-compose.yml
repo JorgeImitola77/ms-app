@@ -1,96 +1,182 @@
-version: '3.8'
+# =========================================================
+# ExplorApp — Orquestación de servicios
+# - Red interna privada: app_network (bridge)
+# - PostgreSQL sin puerto publicado al host (RNF5)
+# - Variables de entorno cargadas desde .env
+# =========================================================
 
 services:
-  # 1. CONTENEDOR DE LA BASE DE DATOS (Independiente)
-  db:
+
+  # ---------------------------------------------------------
+  # 1. Base de datos PostgreSQL
+  #    - SIN puerto publicado al host (solo accesible dentro
+  #      de la red app_network). Cumple RNF5.
+  # ---------------------------------------------------------
+  postgres:
     image: postgres:15-alpine
-    container_name: postgres_db
-    restart: always
+    container_name: explorapp_postgres
+    restart: unless-stopped
+    env_file: .env
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: gestion_personal
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql # Ejecuta el script de las tablas al iniciar
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # 2. MICROSERVICIO: CREAR
-  ms-crear:
+  # ---------------------------------------------------------
+  # 2. Microservicio: Creación (POST)
+  # ---------------------------------------------------------
+  creacion:
     build: ./microservicios/ms-crear
-    container_name: ms_crear
+    container_name: explorapp_creacion
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8001:8000"
-    depends_on:
-      - db
+      - "${MS_CREACION_PORT:-8001}:8000"
     volumes:
-      - ./uploads:/app/uploads 
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+      - photos:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-  # 3. MICROSERVICIO: MODIFICAR
-  ms-modificar:
+  # ---------------------------------------------------------
+  # 3. Microservicio: Modificación (PUT/PATCH)
+  # ---------------------------------------------------------
+  modificacion:
     build: ./microservicios/ms-modificar
-    container_name: ms_modificar
+    container_name: explorapp_modificacion
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8002:8000"
+      - "${MS_MODIFICACION_PORT:-8002}:8000"
+    volumes:
+      - photos:/app/uploads
     depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-  # 4. MICROSERVICIO: CONSULTAR (Diseñado para apagarse a demanda)
-  ms-consultar:
+  # ---------------------------------------------------------
+  # 4. Microservicio: Consulta (GET) — diseñado para escalar
+  #    Usar:  docker compose up -d --scale consulta=N
+  #    El rango de puertos permite hasta 11 réplicas.
+  # ---------------------------------------------------------
+  consulta:
     build: ./microservicios/ms-consultar
-    container_name: ms_consultar
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8003:8000"
+      - "8003-8013:8000"
+    volumes:
+      - photos:/app/uploads:ro
     depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-  # 5. MICROSERVICIO: BORRAR
-  ms-borrar:
+  # ---------------------------------------------------------
+  # 5. Microservicio: Borrado (DELETE)
+  # ---------------------------------------------------------
+  borrado:
     build: ./microservicios/ms-borrar
-    container_name: ms_borrar
+    container_name: explorapp_borrado
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8004:8000"
+      - "${MS_BORRADO_PORT:-8004}:8000"
+    volumes:
+      - photos:/app/uploads
     depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-  # 6. MICROSERVICIO: LOG
-  ms-log:
+  # ---------------------------------------------------------
+  # 6. Microservicio: Log (auditoría)
+  # ---------------------------------------------------------
+  log:
     build: ./microservicios/ms-log
-    container_name: ms_log
+    container_name: explorapp_log
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8005:8000"
+      - "${MS_LOG_PORT:-8005}:8000"
     depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/gestion_personal
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-  # 7. AUTOMATIZADOR Y RAG: n8n
+  # ---------------------------------------------------------
+  # 7. n8n — motor de automatización + RAG
+  # ---------------------------------------------------------
   n8n:
     image: docker.n8n.io/n8nio/n8n
-    container_name: n8n_rag
-    restart: always
-    ports:
-      - "5678:5678"
+    container_name: explorapp_n8n
+    restart: unless-stopped
+    env_file: .env
     environment:
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "${N8N_PUBLIC_PORT:-5678}:5678"
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
-      - db
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
 
-# VOLÚMENES PERSISTENTES (Para no perder datos si se apaga Docker)
+  # ---------------------------------------------------------
+  # 8. Frontend — React + Vite + Tailwind
+  # ---------------------------------------------------------
+  frontend:
+    build: ./frontend
+    container_name: explorapp_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - creacion
+      - modificacion
+      - consulta
+      - borrado
+      - log
+    networks:
+      - app_network
+
+# =========================================================
+# Red interna privada
+# =========================================================
+networks:
+  app_network:
+    driver: bridge
+    name: explorapp_app_network
+
+# =========================================================
+# Volúmenes persistentes
+# =========================================================
 volumes:
-  postgres_data:
+  pg_data:
+    name: explorapp_pg_data
+  photos:
+    name: explorapp_photos
   n8n_data:
+    name: explorapp_n8n_data
