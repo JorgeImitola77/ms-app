@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__e01f24cd-91e3-4781-82e3-4c3fe44946be__clickup_get_task"
+      "mcp__e01f24cd-91e3-4781-82e3-4c3fe44946be__clickup_get_task",
+      "Bash(npm install gsap)"
     ]
   }
 }
