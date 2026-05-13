@@ -1,12 +1,34 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Landing from './pages/landing'
+import Login from './pages/Login'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
+import CrearPersona from './pages/CrearPersona'
+import ConsultarPersona from './pages/ConsultarPersona'
+import ModificarPersona from './pages/ModificarPersona'
+import BorrarPersona from './pages/BorrarPersona'
+import Logs from './pages/Logs'
+import ChatRAG from './pages/ChatRAG'
+
 export default function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-slate-800">ExplorApp</h1>
-        <p className="mt-2 text-slate-600">
-          Gestión de personal — Frontend inicializado.
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+
+        {/* App (authenticated) */}
+        <Route path="/app" element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="crear" element={<CrearPersona />} />
+          <Route path="consultar" element={<ConsultarPersona />} />
+          <Route path="modificar" element={<ModificarPersona />} />
+          <Route path="borrar" element={<BorrarPersona />} />
+          <Route path="logs" element={<Logs />} />
+          <Route path="chat" element={<ChatRAG />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
