@@ -43,6 +43,7 @@ services:
     ports:
       - "${MS_CREACION_PORT:-8001}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -61,6 +62,7 @@ services:
     ports:
       - "${MS_MODIFICACION_PORT:-8002}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared
       - photos:/app/uploads
     depends_on:
       postgres:
