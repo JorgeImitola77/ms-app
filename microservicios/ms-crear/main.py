@@ -1,5 +1,4 @@
 import os
-import shutil
 from datetime import date
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
 import asyncpg
@@ -13,6 +12,16 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
+
+@app.get("/test-db")
+async def test_db_connection(db: AsyncSession = Depends(get_db)):
+    """Endpoint para probar la conexión a PostgreSQL con asyncpg"""
+    try:
+        result = await db.execute(text("SELECT version();"))
+        version = result.scalar()
+        return {"status": "ok", "db_version": version}
+    except Exception as e:
+        return {"status": "error", "detalle": str(e)}
 
 @app.post("/api/personas", status_code=status.HTTP_201_CREATED)
 async def crear_persona(

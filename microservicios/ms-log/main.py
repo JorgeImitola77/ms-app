@@ -11,7 +11,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
-@app.get("/api/logs", response_model=List[LogOut], status_code=status.HTTP_200_OK)
+@app.get("/api/logs", response_model=List[LogEntry], status_code=status.HTTP_200_OK)
 async def consultar_logs(
     tipo: Optional[str] = None,
     documento: Optional[str] = None,
