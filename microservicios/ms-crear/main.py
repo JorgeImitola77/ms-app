@@ -1,10 +1,12 @@
 import os
-import shutil
 from datetime import date
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import asyncpg
-from jose import jwt
+from shared.auth import validar_token_auth0
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from shared.database import get_db
 
 app = FastAPI(title="Microservicio Crear (Auth0)")
 auth_scheme = HTTPBearer()
@@ -33,6 +35,16 @@ def validar_token(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
+@app.get("/test-db")
+async def test_db_connection(db: AsyncSession = Depends(get_db)):
+    """Endpoint para probar la conexión a PostgreSQL con asyncpg"""
+    try:
+        result = await db.execute(text("SELECT version();"))
+        version = result.scalar()
+        return {"status": "ok", "db_version": version}
+    except Exception as e:
+        return {"status": "error", "detalle": str(e)}
+
 @app.post("/api/personas", status_code=status.HTTP_201_CREATED)
 async def crear_persona(
     nro_documento: str = Form(...),
@@ -45,10 +57,11 @@ async def crear_persona(
     correo: str = Form(...),
     celular: str = Form(...),
     foto: UploadFile = File(...),
-    token_valido: bool = Depends(validar_token)
+    token_payload: dict = Depends(validar_token_auth0)
 ):
-    # 1. VALIDACIÓN DE FOTO (Máximo 2MB)
-    MAX_FILE_SIZE = 2 * 1024 * 1024 # 2MB en bytes
+    auth0_id = token_payload.get("sub")
+
+    # 1. VALIDAR TAMAÑO DE LA FOTO
     contenido = await foto.read()
     if len(contenido) > MAX_FILE_SIZE:
         raise HTTPException(status_code=422, detail="La foto supera el límite de 2MB")
@@ -63,7 +76,7 @@ async def crear_persona(
     conn = await get_db_connection()
     try:
         async with conn.transaction():
-            # Insertar Persona (usando nombres de columnas del PDF)
+            # Insertar Persona asociando las columnas correctas de init.sql
             await conn.execute(
                 """INSERT INTO personas (nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
                 apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta) 
@@ -72,10 +85,11 @@ async def crear_persona(
                 apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path
             )
             
-            # Insertar Log (ajustado al PDF)
-            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos}"
+            # Insertar Log de auditoría según la estructura de init.sql
+            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos} por usuario {auth0_id}"
             await conn.execute(
-                "INSERT INTO logs (tipo_transaccion, documento_relacionado, detalle) VALUES ($1, $2, $3)",
+                """INSERT INTO logs (tipo_transaccion, documento_relacionado, detalle) 
+                   VALUES ($1, $2, $3)""",
                 'CREAR', nro_documento, detalle_log
             )
 

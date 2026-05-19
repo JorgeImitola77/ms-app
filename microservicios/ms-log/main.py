@@ -3,7 +3,8 @@ from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 import asyncpg
-from schemas import LogOut
+from shared.models import LogEntry
+from shared.auth import validar_token_auth0
 
 app = FastAPI(title="Microservicio Logs (Auth0)")
 auth_scheme = HTTPBearer()
@@ -17,17 +18,16 @@ def validar_token(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
-@app.get("/api/logs", response_model=List[LogOut], status_code=status.HTTP_200_OK)
+@app.get("/api/logs", response_model=List[LogEntry], status_code=status.HTTP_200_OK)
 async def consultar_logs(
     tipo: Optional[str] = None,
     documento: Optional[str] = None,
-    fecha: Optional[str] = None, # Formato esperado: YYYY-MM-DD
-    token_valido: bool = Depends(validar_token)
+    fecha: Optional[str] = None, 
+    token_payload: dict = Depends(validar_token_auth0)
 ):
     conn = await get_db_connection()
     try:
-        # Construcción dinámica de la consulta SQL
-        query = "SELECT * FROM logs WHERE 1=1"
+        query = "SELECT id_log, fecha_transaccion, tipo_transaccion, documento_relacionado, detalle FROM logs WHERE 1=1"
         valores = []
         contador = 1
 
@@ -55,7 +55,7 @@ async def consultar_logs(
         # Ejecutar la consulta en PostgreSQL
         registros = await conn.fetch(query, *valores)
         
-        return [dict(reg) for reg in registros]
+        return [dict(r) for r in registros]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

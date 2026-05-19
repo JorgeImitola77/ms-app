@@ -1,3 +1,6 @@
+-- Habilitar extensión para IA (n8n RAG)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- 1. TABLA PRINCIPAL: Personas
 CREATE TABLE IF NOT EXISTS personas (
     nro_documento VARCHAR(10) PRIMARY KEY,

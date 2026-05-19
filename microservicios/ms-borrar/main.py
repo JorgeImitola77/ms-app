@@ -26,10 +26,12 @@ async def borrar_persona(documento: str, token_valido: bool = Depends(validar_to
             # 2. Borrar el registro
             await conn.execute("DELETE FROM personas WHERE nro_documento = $1", documento)
 
-            # 3. Registrar la transacción en el Log
-            detalle_log = f"Eliminación definitiva del registro"
+            # Registrar acción en los logs
+            detalle_log = f"Eliminación definitiva del registro hecha por el operador {auth0_id}"
+            
             await conn.execute(
-                "INSERT INTO logs (tipo_transaccion, documento_relacionado, detalle) VALUES ($1, $2, $3)",
+                """INSERT INTO logs (tipo_transaccion, documento_relacionado, detalle) \
+                   VALUES ($1, $2, $3)""",
                 'BORRAR', documento, detalle_log
             )
 
