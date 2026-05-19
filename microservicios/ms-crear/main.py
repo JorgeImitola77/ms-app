@@ -61,10 +61,10 @@ async def crear_persona(
             # Insertar Persona asociando el UUID obtenido
             await conn.execute(
                 """INSERT INTO personas (nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta, creado_por) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
                 nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, usuario_uuid
+                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, creado_por
             )
             
             # Insertar Log de auditoría con las relaciones
