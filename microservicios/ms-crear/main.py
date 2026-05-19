@@ -66,10 +66,10 @@ async def crear_persona(
             # Insertar Persona (usando nombres de columnas del PDF)
             await conn.execute(
                 """INSERT INTO personas (nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta, creado_por) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
                 nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path
+                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, creado_por
             )
             
             # Insertar Log (ajustado al PDF)

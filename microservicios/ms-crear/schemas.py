@@ -11,6 +11,7 @@ class PersonaCreate(BaseModel):
     genero: str = Field(..., description="Masculino, Femenino, No binario, Prefiero no reportar")
     correo_electronico: EmailStr
     celular: str = Field(..., min_length=10, max_length=10, pattern=r'^\d+$')
+    creado_por: str  # UUID del usuario que crea la persona
 
     @validator('tipo_documento')
     def validar_tipo_doc(cls, v):
