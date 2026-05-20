@@ -13,7 +13,7 @@ services:
   #      de la red app_network). Cumple RNF5.
   # ---------------------------------------------------------
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg16
     container_name: explorapp_postgres
     restart: unless-stopped
     env_file: .env
@@ -43,6 +43,7 @@ services:
     ports:
       - "${MS_CREACION_PORT:-8001}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -61,6 +62,7 @@ services:
     ports:
       - "${MS_MODIFICACION_PORT:-8002}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -80,6 +82,7 @@ services:
     ports:
       - "8003-8013:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads:ro
     depends_on:
       postgres:
@@ -98,6 +101,7 @@ services:
     ports:
       - "${MS_BORRADO_PORT:-8004}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -115,6 +119,8 @@ services:
     env_file: .env
     ports:
       - "${MS_LOG_PORT:-8005}:8000"
+    volumes:
+      - ./microservicios/shared:/app/shared:ro
     depends_on:
       postgres:
         condition: service_healthy
