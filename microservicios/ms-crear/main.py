@@ -14,11 +14,12 @@ async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
 @app.get("/test-db")
-async def test_db_connection(db: AsyncSession = Depends(get_db)):
+async def test_db_connection():
     """Endpoint para probar la conexión a PostgreSQL con asyncpg"""
     try:
-        result = await db.execute(text("SELECT version();"))
-        version = result.scalar()
+        conn = await get_db_connection()
+        version = await conn.fetchval("SELECT version();")
+        await conn.close()
         return {"status": "ok", "db_version": version}
     except Exception as e:
         return {"status": "error", "detalle": str(e)}
@@ -35,36 +36,32 @@ async def crear_persona(
     correo: str = Form(...),
     celular: str = Form(...),
     foto: UploadFile = File(...),
-    token_payload: dict = Depends(validar_token_auth0) # Dependencia real aplicada
+    token_payload: dict = Depends(validar_token_auth0)
 ):
-    # Extraer el auth0_id único del usuario autenticado
-    auth0_id = token_payload.get("sub")
-
-    # 1. VALIDAR TAMAÑO DE LA FOTO
+    # Validar tamaño de la foto (máx 2MB)
     contenido = await foto.read()
     if len(contenido) > 2 * 1024 * 1024:
         raise HTTPException(status_code=422, detail="La foto no debe superar los 2 MB")
 
-    # 2. GUARDAR FOTO FÍSICA
-    file_extension = foto.filename.split(".")[-1]
-    file_path = f"{UPLOAD_DIR}/{nro_documento}.{file_extension}"
+    # Guardar la foto
+    extension = foto.filename.split('.')[-1]
+    file_path = f"{UPLOAD_DIR}/{nro_documento}.{extension}"
     with open(file_path, "wb") as f:
         f.write(contenido)
 
     conn = await get_db_connection()
     try:
         async with conn.transaction():
-            # Obtener el usuario_id (UUID) interno correspondiente al auth0_id para respetar la FK
-            usuario_uuid = await conn.fetchval(
-                "SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id
-            )
+            auth0_id = token_payload.get("sub")
             
-            # Si el usuario no existe en nuestra tabla interna, lo registramos dinámicamente con los claims básicos
+            # Verificar si el usuario existe en la tabla usuarios
+            usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
+            
             if not usuario_uuid:
+                # Auto-registrarlo si no existe
                 usuario_uuid = await conn.fetchval(
-                    """INSERT INTO usuarios (auth0_id, email) 
-                       VALUES ($1, $2) RETURNING usuario_id""",
-                    auth0_id, token_payload.get("email")
+                    """INSERT INTO usuarios (auth0_id) VALUES ($1) RETURNING usuario_id""",
+                    auth0_id
                 )
 
             # Insertar Persona asociando el UUID obtenido
@@ -73,10 +70,10 @@ async def crear_persona(
                 apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta, creado_por) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
                 nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, creado_por
+                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, usuario_uuid
             )
             
-            # Insertar Log de auditoría con las relaciones
+            # Insertar Log de auditoría
             detalle_log = f"Creación exitosa de {primer_nombre} {apellidos} por usuario {auth0_id}"
             await conn.execute(
                 """INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) 

@@ -1,10 +1,11 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 class LogOut(BaseModel):
     id_log: int
-    usuario_id: Optional[str] = None
+    usuario_id: Optional[UUID] = None
     fecha_transaccion: datetime
     tipo_transaccion: str
     documento_relacionado: Optional[str] = None

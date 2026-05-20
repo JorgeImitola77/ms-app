@@ -4,6 +4,7 @@ from typing import List, Optional
 import asyncpg
 from schemas import LogOut
 from shared.auth import validar_token_auth0
+from datetime import date
 
 app = FastAPI(title="Microservicio Logs (Auth0)")
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -11,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
-@app.get("/api/logs", response_model=List[LogEntry], status_code=status.HTTP_200_OK)
+@app.get("/api/logs", response_model=List[LogOut], status_code=status.HTTP_200_OK)
 async def consultar_logs(
     tipo: Optional[str] = None,
     documento: Optional[str] = None,
@@ -36,14 +37,19 @@ async def consultar_logs(
             
         if fecha:
             query += f" AND DATE(fecha_transaccion) = ${contador}"
-            valores.append(fecha)
+            try:
+                # Convertimos el texto (YYYY-MM-DD) a un objeto de fecha real
+                fecha_obj = date.fromisoformat(fecha)
+                valores.append(fecha_obj)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usa YYYY-MM-DD.")
             contador += 1
 
         query += " ORDER BY fecha_transaccion DESC"
         registros = await conn.fetch(query, *valores)
         
-        # Mapea dinámicamente las filas incluyendo los campos RAG si vienen en la base de datos
-        return [dict(reg) for reg in registros]
+        # Convertimos los 'Records' de asyncpg a diccionarios de Python
+        return [dict(r) for r in registros]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
