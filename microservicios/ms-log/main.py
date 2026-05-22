@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import asyncpg
 from schemas import LogOut
@@ -7,6 +8,13 @@ from shared.auth import validar_token_auth0
 from datetime import date
 
 app = FastAPI(title="Microservicio Logs (Auth0)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 async def get_db_connection():
