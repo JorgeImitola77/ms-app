@@ -28,12 +28,12 @@ const Navbar = forwardRef(function Navbar(_, ref) {
               Ir al Dashboard
             </Link>
           ) : (
-            <button
-              onClick={() => loginWithRedirect()}
+            <Link
+              to="/login"
               className="relative px-5 py-2.5 bg-surface-900 text-white font-display font-semibold text-sm rounded-xl hover:bg-surface-800 transition-all duration-200 shadow-lg shadow-surface-900/20"
             >
               Iniciar Sesión
-            </button>
+            </Link>
           )}
         </div>
       </div>
