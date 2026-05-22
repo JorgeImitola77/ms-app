@@ -1,8 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth0 } from '@auth0/auth0-react'
 import gsap from 'gsap'
 
 export default function Login() {
+  const { loginWithRedirect } = useAuth0()
+
+  const handleLogin = (connection) => {
+    const params = { appState: { returnTo: '/app' } }
+    if (connection) params.authorizationParams = { connection }
+    loginWithRedirect(params)
+  }
   const formRef = useRef(null)
   const panelRef = useRef(null)
 
@@ -99,8 +107,8 @@ export default function Login() {
 
           <div className="mt-8 space-y-3 login-form-content">
             {/* Auth0 Login Button */}
-            <Link
-              to='/app'
+            <button
+              onClick={() => handleLogin()}
               className="login-btn w-full group flex items-center justify-center gap-3 py-4 px-6 bg-surface-900 text-white font-display font-semibold rounded-2xl hover:bg-surface-800 transition-all duration-300 shadow-xl shadow-surface-900/15 hover:shadow-2xl hover:shadow-surface-900/20 hover:-translate-y-0.5 active:translate-y-0"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
@@ -110,7 +118,7 @@ export default function Login() {
               <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
               </svg>
-            </Link>
+            </button>
 
             {/* Divider */}
             <div className="flex items-center gap-4 py-1">
@@ -120,8 +128,8 @@ export default function Login() {
             </div>
 
             {/* Google SSO Button */}
-            <Link
-              to='/app'
+            <button
+              onClick={() => handleLogin('google-oauth2')}
               className="login-btn w-full flex items-center justify-center gap-3 py-3.5 px-6 bg-white text-surface-700 font-display font-semibold rounded-2xl border border-black/[0.08] hover:bg-surface-50 hover:border-black/[0.15] transition-all duration-200"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -131,21 +139,8 @@ export default function Login() {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53Z" fill="#EA4335" />
               </svg>
               Google
-            </Link>
+            </button>
 
-            {/* Microsoft Button */}
-            <Link
-              to='/app'
-              className="login-btn w-full flex items-center justify-center gap-3 py-3.5 px-6 bg-white text-surface-700 font-display font-semibold rounded-2xl border border-black/[0.08] hover:bg-surface-50 hover:border-black/[0.15] transition-all duration-200"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path d="M11.4 2H2v9.4h9.4V2Z" fill="#F25022" />
-                <path d="M22 2h-9.4v9.4H22V2Z" fill="#7FBA00" />
-                <path d="M11.4 12.6H2V22h9.4v-9.4Z" fill="#00A4EF" />
-                <path d="M22 12.6h-9.4V22H22v-9.4Z" fill="#FFB900" />
-              </svg>
-              Microsoft
-            </Link>
           </div>
 
           <p className="mt-10 text-xs text-center text-surface-600 leading-relaxed terms">
