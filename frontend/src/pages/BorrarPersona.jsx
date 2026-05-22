@@ -1,10 +1,66 @@
+import { useState } from 'react'
+import { useAuth0 } from '@auth0/auth0-react'
 import PageHeader from '../components/ui/PageHeader'
 import SearchBar from '../components/ui/SearchBar'
 import EmptyState from '../components/ui/EmptyState'
+import { useToast } from '../components/ui/Toast'
+import { consultarPersona, borrarPersona } from '../api/personas'
 
 export default function BorrarPersona() {
-  const found = false
-  const showConfirm = false
+  const { getAccessTokenSilently } = useAuth0()
+  const toast = useToast()
+
+  const [documento, setDocumento] = useState('')
+  const [persona, setPersona] = useState(null)
+  const [searching, setSearching] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const handleSearch = async (doc) => {
+    if (!doc || !/^\d{1,10}$/.test(doc)) {
+      toast.error('Ingresa un documento válido (1-10 dígitos).')
+      return
+    }
+    setSearching(true)
+    setPersona(null)
+    try {
+      const data = await consultarPersona(doc, getAccessTokenSilently)
+      setPersona(data)
+    } catch (err) {
+      if (err.status === 404) {
+        toast.error('No se encontró ninguna persona con ese documento.')
+      } else {
+        toast.error(err.message || 'Error al buscar la persona.')
+      }
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setPersona(null)
+    setDocumento('')
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!persona) return
+    setDeleting(true)
+    try {
+      await borrarPersona(persona.nro_documento, getAccessTokenSilently)
+      toast.success(`Persona ${persona.primer_nombre} ${persona.apellidos} eliminada.`)
+      setShowConfirm(false)
+      setPersona(null)
+      setDocumento('')
+    } catch (err) {
+      toast.error(err.message || 'No se pudo eliminar la persona.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const fullName = persona
+    ? [persona.primer_nombre, persona.segundo_nombre, persona.apellidos].filter(Boolean).join(' ')
+    : ''
 
   return (
     <div>
@@ -14,10 +70,25 @@ export default function BorrarPersona() {
       />
 
       <div className="card max-w-2xl mx-auto mb-6">
-        <SearchBar placeholder="Ingresa el documento a eliminar..." />
+        <SearchBar
+          placeholder="Ingresa el documento a eliminar..."
+          value={documento}
+          onChange={setDocumento}
+          onSearch={handleSearch}
+          loading={searching}
+        />
       </div>
 
-      {!found && (
+      {searching && (
+        <div className="card max-w-2xl mx-auto">
+          <div className="flex flex-col items-center py-12 gap-3">
+            <div className="w-8 h-8 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
+            <p className="text-sm text-surface-500">Buscando persona...</p>
+          </div>
+        </div>
+      )}
+
+      {!searching && !persona && (
         <div className="card max-w-2xl mx-auto">
           <EmptyState
             iconBg="bg-red-50"
@@ -32,7 +103,7 @@ export default function BorrarPersona() {
         </div>
       )}
 
-      {found && (
+      {!searching && persona && (
         <div className="card max-w-2xl mx-auto border-red-200">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center flex-shrink-0">
@@ -41,21 +112,23 @@ export default function BorrarPersona() {
               </svg>
             </div>
             <div className="flex-1">
-              <h3 className="font-display font-semibold text-surface-900">Juan Carlos Pérez García</h3>
-              <p className="text-sm text-surface-500 mt-0.5">Cédula — 1020304050</p>
+              <h3 className="font-display font-semibold text-surface-900">{fullName}</h3>
+              <p className="text-sm text-surface-500 mt-0.5">{persona.tipo_documento} — {persona.nro_documento}</p>
               <p className="text-sm text-red-600 mt-3">
                 Esta acción no se puede deshacer. El registro será eliminado permanentemente.
               </p>
               <div className="flex gap-3 mt-4">
-                <button className="btn-secondary py-2 px-4 text-sm">Cancelar</button>
-                <button className="btn-danger py-2 px-6 text-sm">Confirmar Eliminación</button>
+                <button onClick={handleCancel} className="btn-secondary py-2 px-4 text-sm">Cancelar</button>
+                <button onClick={() => setShowConfirm(true)} className="btn-danger py-2 px-6 text-sm">
+                  Confirmar Eliminación
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {showConfirm && (
+      {showConfirm && persona && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto">
@@ -65,11 +138,23 @@ export default function BorrarPersona() {
             </div>
             <h3 className="text-center font-display font-semibold text-surface-900 mt-4">¿Eliminar registro?</h3>
             <p className="text-center text-sm text-surface-500 mt-2">
-              Se borrará permanentemente a <strong>Juan Carlos Pérez García</strong> del sistema.
+              Se borrará permanentemente a <strong>{fullName}</strong> del sistema.
             </p>
             <div className="flex gap-3 mt-6">
-              <button className="btn-secondary flex-1 py-2.5 text-sm">Cancelar</button>
-              <button className="btn-danger flex-1 py-2.5 text-sm">Eliminar</button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={deleting}
+                className="btn-secondary flex-1 py-2.5 text-sm disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="btn-danger flex-1 py-2.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
             </div>
           </div>
         </div>
