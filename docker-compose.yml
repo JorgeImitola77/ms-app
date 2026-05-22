@@ -153,6 +153,10 @@ services:
 
   # ---------------------------------------------------------
   # 8. Frontend — React + Vite + Tailwind
+  #    El volumen monta el código fuente del host dentro del
+  #    contenedor para que Vite HMR detecte cambios en tiempo real.
+  #    node_modules queda aislado con un volumen anónimo para no
+  #    pisar los módulos instalados dentro del contenedor.
   # ---------------------------------------------------------
   frontend:
     build: ./frontend
@@ -160,6 +164,9 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - creacion
       - modificacion
