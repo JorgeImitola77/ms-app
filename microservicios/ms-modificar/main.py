@@ -44,7 +44,7 @@ async def modificar_persona(documento: str, datos: PersonaUpdate, token_payload:
 
             # Registrar en logs con el usuario de Auth0
             usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
-            detalle_log = f"Modificación parcial realizada por {auth0_id}. Campos actualizados: {list(campos_a_actualizar.keys())}"
+            detalle_log = f"Modificación parcial. Campos actualizados: {list(campos_a_actualizar.keys())}"
 
             await conn.execute(
                 "INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) VALUES ($1, $2, $3, $4)",

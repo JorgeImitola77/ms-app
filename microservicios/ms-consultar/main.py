@@ -38,7 +38,7 @@ async def consultar_persona(documento: str, token_payload: dict = Depends(valida
 
         # 2. Registrar la consulta en los Logs asociándolo al usuario interno
         usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
-        detalle_log = f"Consulta de datos del documento {documento} ejecutada por {auth0_id}"
+        detalle_log = f"Consulta de datos del documento {documento}"
         
         await conn.execute(
             """INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) 

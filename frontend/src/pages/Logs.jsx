@@ -169,8 +169,15 @@ export default function Logs() {
                       </span>
                     </td>
                     <td className="px-6 py-3.5 text-sm font-mono text-surface-600">{log.documento_relacionado || '—'}</td>
-                    <td className="px-6 py-3.5 text-sm text-surface-600 max-w-xs truncate" title={log.detalle || log.pregunta_rag || ''}>
-                      {log.detalle || log.pregunta_rag || '—'}
+                    <td className="px-6 py-3.5 max-w-xs">
+                      <p className="text-sm text-surface-600 truncate" title={log.detalle || log.pregunta_rag || ''}>
+                        {log.detalle || log.pregunta_rag || '—'}
+                      </p>
+                      {log.email_usuario && (
+                        <p className="text-xs text-surface-400 mt-0.5">
+                          Por usuario: <span className="font-medium text-surface-500">{log.email_usuario}</span>
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}

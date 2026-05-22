@@ -29,7 +29,11 @@ async def consultar_logs(
 ):
     conn = await get_db_connection()
     try:
-        query = "SELECT * FROM logs WHERE 1=1"
+        query = """
+            SELECT l.*, u.email AS email_usuario
+            FROM logs l
+            LEFT JOIN usuarios u ON l.usuario_id = u.usuario_id
+            WHERE 1=1"""
         valores = []
         contador = 1
 

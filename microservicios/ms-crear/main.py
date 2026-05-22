@@ -62,15 +62,25 @@ async def crear_persona(
         async with conn.transaction():
             auth0_id = token_payload.get("sub")
             
+            email_from_token = token_payload.get("email")
+
             # Verificar si el usuario existe en la tabla usuarios
-            usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
-            
-            if not usuario_uuid:
+            row = await conn.fetchrow("SELECT usuario_id, email FROM usuarios WHERE auth0_id = $1", auth0_id)
+
+            if not row:
                 # Auto-registrarlo si no existe
                 usuario_uuid = await conn.fetchval(
-                    """INSERT INTO usuarios (auth0_id) VALUES ($1) RETURNING usuario_id""",
-                    auth0_id
+                    "INSERT INTO usuarios (auth0_id, email) VALUES ($1, $2) RETURNING usuario_id",
+                    auth0_id, email_from_token
                 )
+            else:
+                usuario_uuid = row["usuario_id"]
+                # Actualizar email si antes quedó NULL
+                if email_from_token and not row["email"]:
+                    await conn.execute(
+                        "UPDATE usuarios SET email = $1 WHERE usuario_id = $2",
+                        email_from_token, usuario_uuid
+                    )
 
             # Insertar Persona asociando el UUID obtenido
             await conn.execute(
@@ -82,7 +92,7 @@ async def crear_persona(
             )
             
             # Insertar Log de auditoría
-            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos} por usuario {auth0_id}"
+            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos}"
             await conn.execute(
                 """INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) 
                    VALUES ($1, $2, $3, $4)""",
