@@ -1,9 +1,13 @@
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import asyncpg
 from schemas import PersonaOut
 from shared.auth import validar_token_auth0
+
+UPLOAD_DIR = "/app/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(title="Microservicio Consultar (Auth0)")
 app.add_middleware(
@@ -13,6 +17,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 async def get_db_connection():
