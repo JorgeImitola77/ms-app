@@ -35,19 +35,19 @@ async def crear_persona(
     genero: str = Form(...),
     correo: str = Form(...),
     celular: str = Form(...),
-    foto: UploadFile = File(...),
+    foto: UploadFile = File(None),
     token_payload: dict = Depends(validar_token_auth0)
 ):
-    # Validar tamaño de la foto (máx 2MB)
-    contenido = await foto.read()
-    if len(contenido) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=422, detail="La foto no debe superar los 2 MB")
-
-    # Guardar la foto
-    extension = foto.filename.split('.')[-1]
-    file_path = f"{UPLOAD_DIR}/{nro_documento}.{extension}"
-    with open(file_path, "wb") as f:
-        f.write(contenido)
+    # Guardar la foto si se proporcionó
+    file_path = None
+    if foto and foto.filename:
+        contenido = await foto.read()
+        if len(contenido) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=422, detail="La foto no debe superar los 2 MB")
+        extension = foto.filename.split('.')[-1]
+        file_path = f"{UPLOAD_DIR}/{nro_documento}.{extension}"
+        with open(file_path, "wb") as f:
+            f.write(contenido)
 
     conn = await get_db_connection()
     try:
