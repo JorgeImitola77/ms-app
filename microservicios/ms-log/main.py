@@ -1,17 +1,26 @@
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import asyncpg
-from schemas import LogOut
+from schemas import LogOut, LogRagIn
 from shared.auth import validar_token_auth0
+from datetime import date
 
 app = FastAPI(title="Microservicio Logs (Auth0)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
-@app.get("/api/logs", response_model=List[LogEntry], status_code=status.HTTP_200_OK)
+@app.get("/api/logs", response_model=List[LogOut], status_code=status.HTTP_200_OK)
 async def consultar_logs(
     tipo: Optional[str] = None,
     documento: Optional[str] = None,
@@ -20,7 +29,11 @@ async def consultar_logs(
 ):
     conn = await get_db_connection()
     try:
-        query = "SELECT * FROM logs WHERE 1=1"
+        query = """
+            SELECT l.*, u.email AS email_usuario
+            FROM logs l
+            LEFT JOIN usuarios u ON l.usuario_id = u.usuario_id
+            WHERE 1=1"""
         valores = []
         contador = 1
 
@@ -36,15 +49,44 @@ async def consultar_logs(
             
         if fecha:
             query += f" AND DATE(fecha_transaccion) = ${contador}"
-            valores.append(fecha)
+            try:
+                # Convertimos el texto (YYYY-MM-DD) a un objeto de fecha real
+                fecha_obj = date.fromisoformat(fecha)
+                valores.append(fecha_obj)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usa YYYY-MM-DD.")
             contador += 1
 
         query += " ORDER BY fecha_transaccion DESC"
         registros = await conn.fetch(query, *valores)
-        
-        # Mapea dinámicamente las filas incluyendo los campos RAG si vienen en la base de datos
-        return [dict(reg) for reg in registros]
-        
+
+        # Convertimos los 'Records' de asyncpg a diccionarios de Python
+        return [dict(r) for r in registros]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await conn.close()
+
+
+@app.post("/api/logs/internal", status_code=status.HTTP_201_CREATED)
+async def registrar_log_rag(log: LogRagIn):
+    """
+    Endpoint interno (red privada app_network) usado por el workflow RAG de n8n.
+    No exige JWT porque n8n no porta token de usuario; el usuario_id llega en el body.
+    Registra la transacción CONSULTA_RAG con su pregunta y respuesta.
+    """
+    conn = await get_db_connection()
+    try:
+        detalle = log.detalle or f"Consulta RAG: {log.pregunta_rag}"
+        id_log = await conn.fetchval(
+            """INSERT INTO logs
+               (usuario_id, tipo_transaccion, pregunta_rag, respuesta_rag, detalle)
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING id_log""",
+            log.usuario_id, log.tipo_transaccion, log.pregunta_rag, log.respuesta_rag, detalle
+        )
+        return {"status": "success", "id_log": id_log}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

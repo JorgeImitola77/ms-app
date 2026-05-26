@@ -13,7 +13,7 @@ services:
   #      de la red app_network). Cumple RNF5.
   # ---------------------------------------------------------
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg15
     container_name: explorapp_postgres
     restart: unless-stopped
     env_file: .env
@@ -43,7 +43,7 @@ services:
     ports:
       - "${MS_CREACION_PORT:-8001}:8000"
     volumes:
-      - ./microservicios/shared:/app/shared
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -62,7 +62,7 @@ services:
     ports:
       - "${MS_MODIFICACION_PORT:-8002}:8000"
     volumes:
-      - ./microservicios/shared:/app/shared
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -73,15 +73,17 @@ services:
   # ---------------------------------------------------------
   # 4. Microservicio: Consulta (GET) — diseñado para escalar
   #    Usar:  docker compose up -d --scale consulta=N
-  #    El rango de puertos permite hasta 11 réplicas.
+  #    El rango de puertos empieza en 8010 para no colisionar
+  #    con los puertos fijos de borrado (8004) y log (8005).
   # ---------------------------------------------------------
   consulta:
     build: ./microservicios/ms-consultar
     restart: unless-stopped
     env_file: .env
     ports:
-      - "8003-8013:8000"
+      - "8003:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads:ro
     depends_on:
       postgres:
@@ -100,6 +102,7 @@ services:
     ports:
       - "${MS_BORRADO_PORT:-8004}:8000"
     volumes:
+      - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads
     depends_on:
       postgres:
@@ -117,6 +120,8 @@ services:
     env_file: .env
     ports:
       - "${MS_LOG_PORT:-8005}:8000"
+    volumes:
+      - ./microservicios/shared:/app/shared:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,9 +130,11 @@ services:
 
   # ---------------------------------------------------------
   # 7. n8n — motor de automatización + RAG
+  #    Conecta a PostgreSQL por la red interna app_network
+  #    usando el host "postgres" (nombre del servicio).
   # ---------------------------------------------------------
   n8n:
-    image: docker.n8n.io/n8nio/n8n
+    image: n8nio/n8n:latest
     container_name: explorapp_n8n
     restart: unless-stopped
     env_file: .env
@@ -136,10 +143,17 @@ services:
       N8N_PORT: ${N8N_PORT}
       N8N_PROTOCOL: ${N8N_PROTOCOL}
       NODE_ENV: ${NODE_ENV}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Bogota}
     ports:
       - "${N8N_PUBLIC_PORT:-5678}:5678"
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows:ro
+      - ./n8n/credentials:/home/node/credentials:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,13 +162,25 @@ services:
 
   # ---------------------------------------------------------
   # 8. Frontend — React + Vite + Tailwind
+  #    El volumen monta el código fuente del host dentro del
+  #    contenedor para que Vite HMR detecte cambios en tiempo real.
+  #    node_modules queda aislado con un volumen anónimo para no
+  #    pisar los módulos instalados dentro del contenedor.
   # ---------------------------------------------------------
   frontend:
     build: ./frontend
     container_name: explorapp_frontend
     restart: unless-stopped
+    env_file: .env
+    environment:
+      - VITE_AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - VITE_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+      - VITE_AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - creacion
       - modificacion

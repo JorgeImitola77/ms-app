@@ -1,9 +1,17 @@
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 from shared.auth import validar_token_auth0
 
 app = FastAPI(title="Microservicio Borrar (Auth0)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 async def get_db_connection():
@@ -24,7 +32,7 @@ async def borrar_persona(documento: str, token_payload: dict = Depends(validar_t
 
             # Registrar acción en los logs
             usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
-            detalle_log = f"Eliminación definitiva del registro hecha por el operador {auth0_id}"
+            detalle_log = f"Eliminación definitiva del documento {documento}"
             
             await conn.execute(
                 """INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) 

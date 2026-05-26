@@ -1,0 +1,201 @@
+{
+  "name": "RAG - Consulta Personas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-consulta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook RAG",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "rag-consulta"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 512, temperature: 0, system: \"Eres un generador de SQL para PostgreSQL. Conoces SOLO la tabla 'personas' con columnas: nro_documento (VARCHAR(10) PK), tipo_documento ('Tarjeta de identidad'|'Cedula'), primer_nombre, segundo_nombre, apellidos, fecha_nacimiento (DATE), genero ('Masculino'|'Femenino'|'No binario'|'Prefiero no reportar'), correo, celular, foto_ruta, creado_por (UUID), fecha_registro (TIMESTAMP). Reglas estrictas: (1) Devuelve EXCLUSIVAMENTE una consulta SELECT en una sola linea, sin punto y coma final, sin bloques markdown ni explicaciones. (2) Prohibido INSERT/UPDATE/DELETE/ALTER/DROP/TRUNCATE/CREATE/GRANT/COPY. (3) Para 'mas joven' usa ORDER BY fecha_nacimiento DESC LIMIT 1; para 'mayor' usa ORDER BY fecha_nacimiento ASC LIMIT 1. (4) Si la pregunta no se puede responder con esta tabla devuelve: SELECT NULL AS error. (5) Aplica LIMIT 100 cuando devuelvas multiples filas. (6) Para calcular edad usa DATE_PART('year', AGE(fecha_nacimiento)).\", messages: [ { role: 'user', content: String($json.body && $json.body.pregunta || '') } ] }) }}",
+        "options": {}
+      },
+      "id": "node-claude-sql",
+      "name": "Claude - Generar SQL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 400],
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_ANTHROPIC_CREDENTIAL_ID",
+          "name": "ExplorApp LLM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrae el SQL devuelto por Claude y valida que sea un SELECT seguro\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nlet sql = String(raw).trim();\nsql = sql.replace(/^```(?:sql)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\nsql = sql.replace(/;\\s*$/, '').trim();\nif (!/^SELECT\\b/i.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nif (/;\\s*\\S/.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nconst body = ($('Webhook RAG').first().json.body) || {};\nreturn [{\n  json: {\n    sql,\n    pregunta: body.pregunta || '',\n    usuario_id: body.usuario_id || null\n  }\n}];"
+      },
+      "id": "node-sanitizar-sql",
+      "name": "Sanitizar SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "additionalFields": {}
+      },
+      "id": "node-postgres",
+      "name": "Postgres - Ejecutar SQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 400],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
+          "name": "ExplorApp Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrupa el resultado de Postgres en un unico contexto JSON para el LLM.\n// Filtra el item vacio que Postgres emite (alwaysOutputData) cuando no hay filas.\nconst rows = $input.all()\n  .map(it => it.json)\n  .filter(r => r && Object.keys(r).length > 0);\nconst sanit = $('Sanitizar SQL').first().json;\nreturn [{\n  json: {\n    pregunta: sanit.pregunta || '',\n    usuario_id: sanit.usuario_id || null,\n    sql: sanit.sql || '',\n    rows,\n    filas: rows.length,\n    contextoJson: JSON.stringify(rows, null, 2)\n  }\n}];"
+      },
+      "id": "node-componer-contexto",
+      "name": "Componer contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 512, temperature: 0.2, system: \"Eres ExplorApp Assistant. Recibes la pregunta original del usuario y el resultado JSON de una consulta SQL sobre la tabla 'personas'. Responde en espanol, de forma natural, concisa y directa. Si el resultado es vacio, NULL o contiene un campo 'error', responde exactamente: 'No encontre informacion para responder esa pregunta.' Nunca menciones SQL, JSON ni terminologia tecnica. No inventes datos que no esten en el contexto.\", messages: [ { role: 'user', content: 'Pregunta del usuario: ' + $json.pregunta + '\\n\\nResultado de la base de datos (JSON):\\n' + $json.contextoJson + '\\n\\nRedacta la respuesta natural.' } ] }) }}",
+        "options": {}
+      },
+      "id": "node-claude-respuesta",
+      "name": "Claude - Generar Respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 400],
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_ANTHROPIC_CREDENTIAL_ID",
+          "name": "ExplorApp LLM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrae el texto final de Claude y arma el payload de respuesta + log\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nconst respuesta = String(raw).trim();\nconst ctx = $('Componer contexto').first().json;\nconst uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst usuario_id = uuidRe.test(String(ctx.usuario_id || '')) ? ctx.usuario_id : null;\nreturn [{\n  json: {\n    pregunta: ctx.pregunta,\n    respuesta,\n    sql: ctx.sql,\n    filas: ctx.filas || 0,\n    usuario_id\n  }\n}];"
+      },
+      "id": "node-componer-respuesta",
+      "name": "Componer respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://log:8000/api/logs/internal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tipo_transaccion: 'CONSULTA_RAG', usuario_id: $json.usuario_id, pregunta_rag: $json.pregunta, respuesta_rag: $json.respuesta, detalle: 'RAG: ' + ($json.filas || 0) + ' fila(s) | SQL: ' + ($json.sql || '') }) }}",
+        "options": {}
+      },
+      "id": "node-log",
+      "name": "Registrar Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 400],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ pregunta: $('Componer respuesta').first().json.pregunta, respuesta: $('Componer respuesta').first().json.respuesta }) }}",
+        "options": {}
+      },
+      "id": "node-respond",
+      "name": "Responder al Frontend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2160, 400]
+    }
+  ],
+  "connections": {
+    "Webhook RAG": {
+      "main": [[{ "node": "Claude - Generar SQL", "type": "main", "index": 0 }]]
+    },
+    "Claude - Generar SQL": {
+      "main": [[{ "node": "Sanitizar SQL", "type": "main", "index": 0 }]]
+    },
+    "Sanitizar SQL": {
+      "main": [[{ "node": "Postgres - Ejecutar SQL", "type": "main", "index": 0 }]]
+    },
+    "Postgres - Ejecutar SQL": {
+      "main": [[{ "node": "Componer contexto", "type": "main", "index": 0 }]]
+    },
+    "Componer contexto": {
+      "main": [[{ "node": "Claude - Generar Respuesta", "type": "main", "index": 0 }]]
+    },
+    "Claude - Generar Respuesta": {
+      "main": [[{ "node": "Componer respuesta", "type": "main", "index": 0 }]]
+    },
+    "Componer respuesta": {
+      "main": [[{ "node": "Registrar Log", "type": "main", "index": 0 }]]
+    },
+    "Registrar Log": {
+      "main": [[{ "node": "Responder al Frontend", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "rag" },
+    { "name": "n8n" },
+    { "name": "ia" },
+    { "name": "workflow" }
+  ]
+}

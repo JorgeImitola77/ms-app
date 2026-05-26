@@ -1,10 +1,18 @@
 import os
 from datetime import date
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 from shared.auth import validar_token_auth0
 
 app = FastAPI(title="Microservicio Crear (Auth0)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATABASE_URL = os.getenv("DATABASE_URL")
 UPLOAD_DIR = "/app/uploads"
 
@@ -14,11 +22,12 @@ async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
 @app.get("/test-db")
-async def test_db_connection(db: AsyncSession = Depends(get_db)):
+async def test_db_connection():
     """Endpoint para probar la conexión a PostgreSQL con asyncpg"""
     try:
-        result = await db.execute(text("SELECT version();"))
-        version = result.scalar()
+        conn = await get_db_connection()
+        version = await conn.fetchval("SELECT version();")
+        await conn.close()
         return {"status": "ok", "db_version": version}
     except Exception as e:
         return {"status": "error", "detalle": str(e)}
@@ -34,38 +43,44 @@ async def crear_persona(
     genero: str = Form(...),
     correo: str = Form(...),
     celular: str = Form(...),
-    foto: UploadFile = File(...),
-    token_payload: dict = Depends(validar_token_auth0) # Dependencia real aplicada
+    foto: UploadFile = File(None),
+    token_payload: dict = Depends(validar_token_auth0)
 ):
-    # Extraer el auth0_id único del usuario autenticado
-    auth0_id = token_payload.get("sub")
-
-    # 1. VALIDAR TAMAÑO DE LA FOTO
-    contenido = await foto.read()
-    if len(contenido) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=422, detail="La foto no debe superar los 2 MB")
-
-    # 2. GUARDAR FOTO FÍSICA
-    file_extension = foto.filename.split(".")[-1]
-    file_path = f"{UPLOAD_DIR}/{nro_documento}.{file_extension}"
-    with open(file_path, "wb") as f:
-        f.write(contenido)
+    # Guardar la foto si se proporcionó
+    file_path = None
+    if foto and foto.filename:
+        contenido = await foto.read()
+        if len(contenido) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=422, detail="La foto no debe superar los 2 MB")
+        extension = foto.filename.split('.')[-1]
+        file_path = f"{UPLOAD_DIR}/{nro_documento}.{extension}"
+        with open(file_path, "wb") as f:
+            f.write(contenido)
 
     conn = await get_db_connection()
     try:
         async with conn.transaction():
-            # Obtener el usuario_id (UUID) interno correspondiente al auth0_id para respetar la FK
-            usuario_uuid = await conn.fetchval(
-                "SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id
-            )
+            auth0_id = token_payload.get("sub")
             
-            # Si el usuario no existe en nuestra tabla interna, lo registramos dinámicamente con los claims básicos
-            if not usuario_uuid:
+            email_from_token = token_payload.get("email")
+
+            # Verificar si el usuario existe en la tabla usuarios
+            row = await conn.fetchrow("SELECT usuario_id, email FROM usuarios WHERE auth0_id = $1", auth0_id)
+
+            if not row:
+                # Auto-registrarlo si no existe
                 usuario_uuid = await conn.fetchval(
-                    """INSERT INTO usuarios (auth0_id, email) 
-                       VALUES ($1, $2) RETURNING usuario_id""",
-                    auth0_id, token_payload.get("email")
+                    "INSERT INTO usuarios (auth0_id, email) VALUES ($1, $2) RETURNING usuario_id",
+                    auth0_id, email_from_token
                 )
+            else:
+                usuario_uuid = row["usuario_id"]
+                # Actualizar email si antes quedó NULL
+                if email_from_token and not row["email"]:
+                    await conn.execute(
+                        "UPDATE usuarios SET email = $1 WHERE usuario_id = $2",
+                        email_from_token, usuario_uuid
+                    )
 
             # Insertar Persona asociando el UUID obtenido
             await conn.execute(
@@ -73,11 +88,11 @@ async def crear_persona(
                 apellidos, fecha_nacimiento, genero, correo, celular, foto_ruta, creado_por) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
                 nro_documento, tipo_documento, primer_nombre, segundo_nombre, 
-                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, creado_por
+                apellidos, date.fromisoformat(fecha_nacimiento), genero, correo, celular, file_path, usuario_uuid
             )
             
-            # Insertar Log de auditoría con las relaciones
-            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos} por usuario {auth0_id}"
+            # Insertar Log de auditoría
+            detalle_log = f"Creación exitosa de {primer_nombre} {apellidos}"
             await conn.execute(
                 """INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) 
                    VALUES ($1, $2, $3, $4)""",
