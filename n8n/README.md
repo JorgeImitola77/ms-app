@@ -54,8 +54,10 @@ encryption key del instance. Importarlas la primera vez desde la UI:
 
 ### 2) LLM (`ExplorApp LLM`)
 
-1. UI n8n → `Settings` → `Credentials` → `New` → tipo **OpenAI**.
-2. Pegar como `API Key` el valor de `LLM_API_KEY` del `.env`.
+El proyecto usa **Anthropic Claude** (modelo `claude-sonnet-4-6`), no OpenAI.
+
+1. UI n8n → `Settings` → `Credentials` → `New` → tipo **Anthropic**.
+2. Pegar como `API Key` el valor de `LLM_API_KEY` del `.env` (clave `sk-ant-...`).
 3. Guardar con el nombre **`ExplorApp LLM`**.
 
 ## Importar el workflow de prueba
@@ -75,3 +77,57 @@ Para validar la conexión PostgreSQL:
       (`SELECT * FROM personas LIMIT 1`).
 - [x] Credenciales `ExplorApp Postgres` y `ExplorApp LLM` guardadas y
       funcionales.
+
+## Workflow RAG (`rag_consulta_personas.json`)
+
+Implementa el patrón RAG (RF8 / Caso de Uso 3): responde consultas en lenguaje
+natural sobre la tabla `personas` y registra cada consulta en el log de
+auditoría.
+
+### Flujo de nodos
+
+1. **Webhook RAG** (`POST /webhook/rag-consulta`) — recibe
+   `{ "pregunta": string, "usuario_id": string }`.
+2. **Claude - Generar SQL** — Claude traduce la pregunta a un `SELECT` de
+   PostgreSQL (NL2SQL) acotado al esquema de `personas`.
+3. **Sanitizar SQL** — valida que sea un único `SELECT` (rechaza
+   INSERT/UPDATE/DELETE/DDL y multi-sentencia); si no, usa `SELECT NULL AS error`.
+4. **Postgres - Ejecutar SQL** — ejecuta la consulta con la credencial
+   `ExplorApp Postgres`.
+5. **Componer contexto** — agrupa las filas como contexto JSON.
+6. **Claude - Generar Respuesta** — Claude redacta la respuesta natural a partir
+   del contexto + la pregunta.
+7. **Registrar Log** — `POST http://log:8000/api/logs/internal` con
+   `tipo_transaccion=CONSULTA_RAG`, `pregunta_rag`, `respuesta_rag`, `usuario_id`.
+   Tolera fallos (`continueRegularOutput`) para no romper la respuesta al usuario.
+8. **Responder al Frontend** — devuelve `{ "pregunta", "respuesta" }`.
+
+### Importar y configurar
+
+1. UI n8n → `Workflows` → `Import from File` →
+   `n8n/workflows/rag_consulta_personas.json`.
+2. Asignar la credencial `ExplorApp Postgres` al nodo **Postgres - Ejecutar SQL**.
+3. Asignar la credencial `ExplorApp LLM` (Anthropic) a **ambos** nodos
+   `Claude - *` (el campo `id` viene como placeholder).
+4. Guardar y **activar** el workflow para exponer el webhook productivo.
+
+### Probar (`curl`)
+
+```bash
+curl -X POST http://localhost:5678/webhook/rag-consulta \
+  -H "Content-Type: application/json" \
+  -d '{"pregunta":"¿Cuál es el empleado más joven?","usuario_id":null}'
+```
+
+### Casos de prueba
+
+- `"¿Cuál es el empleado más joven?"` → devuelve el nombre.
+- `"¿Cuántas personas hay registradas?"` → devuelve el conteo.
+- `"Lista las personas cuyo género sea No binario."` → devuelve la lista.
+
+### Criterio de aceptación
+
+- [x] Webhook responde con la respuesta natural a las 3 preguntas de prueba.
+- [x] Cada consulta queda registrada en `logs` con
+      `tipo_transaccion = CONSULTA_RAG` (verificable vía `GET /api/logs?tipo=CONSULTA_RAG`).
+- [x] Workflow exportado a JSON y versionado en `n8n/workflows/`.

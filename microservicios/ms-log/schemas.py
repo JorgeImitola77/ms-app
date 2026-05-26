@@ -3,6 +3,13 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
+class LogRagIn(BaseModel):
+    tipo_transaccion: str = "CONSULTA_RAG"
+    usuario_id: Optional[UUID] = None
+    pregunta_rag: str
+    respuesta_rag: str
+    detalle: Optional[str] = None
+
 class LogOut(BaseModel):
     id_log: int
     usuario_id: Optional[UUID] = None
