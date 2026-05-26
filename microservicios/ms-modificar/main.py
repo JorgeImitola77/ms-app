@@ -1,10 +1,18 @@
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 from shared.models import PersonaUpdate
 from shared.auth import validar_token_auth0
 
 app = FastAPI(title="Microservicio Modificar (Auth0)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 async def get_db_connection():
@@ -35,11 +43,12 @@ async def modificar_persona(documento: str, datos: PersonaUpdate, token_payload:
             await conn.execute(query, *valores)
 
             # Registrar en logs con el usuario de Auth0
-            detalle_log = f"Modificación parcial realizada por {auth0_id}. Campos actualizados: {list(campos_a_actualizar.keys())}"
-            
+            usuario_uuid = await conn.fetchval("SELECT usuario_id FROM usuarios WHERE auth0_id = $1", auth0_id)
+            detalle_log = f"Modificación parcial. Campos actualizados: {list(campos_a_actualizar.keys())}"
+
             await conn.execute(
-                "INSERT INTO logs (tipo_transaccion, documento_relacionado, detalle) VALUES ($1, $2, $3)",
-                'MODIFICAR', documento, detalle_log
+                "INSERT INTO logs (usuario_id, tipo_transaccion, documento_relacionado, detalle) VALUES ($1, $2, $3, $4)",
+                usuario_uuid, 'MODIFICAR', documento, detalle_log
             )
 
         return {"status": "success", "message": "Datos actualizados correctamente"}

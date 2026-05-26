@@ -1,13 +1,8 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth0 } from '@auth0/auth0-react'
 import PageHeader from '../components/ui/PageHeader'
-
-const mockLogs = [
-  { id_log: 1, fecha_transaccion: '2026-05-09 14:32:10', tipo_transaccion: 'CREAR', documento_relacionado: '1020304050', detalle: 'Creación exitosa de Juan Pérez' },
-  { id_log: 2, fecha_transaccion: '2026-05-09 14:35:22', tipo_transaccion: 'CONSULTAR', documento_relacionado: '1020304050', detalle: 'Consulta de datos personales' },
-  { id_log: 3, fecha_transaccion: '2026-05-09 15:01:45', tipo_transaccion: 'ACTUALIZAR', documento_relacionado: '1020304050', detalle: 'Modificación de correo y celular' },
-  { id_log: 4, fecha_transaccion: '2026-05-09 15:10:00', tipo_transaccion: 'CONSULTA_RAG', documento_relacionado: null, detalle: 'Pregunta: ¿Cuál es el empleado más joven?' },
-  { id_log: 5, fecha_transaccion: '2026-05-09 16:22:33', tipo_transaccion: 'BORRAR', documento_relacionado: '9876543210', detalle: 'Eliminación de María López' },
-  { id_log: 6, fecha_transaccion: '2026-05-08 09:15:00', tipo_transaccion: 'CREAR', documento_relacionado: '5544332211', detalle: 'Creación exitosa de Pedro Gómez' },
-]
+import { useToast } from '../components/ui/Toast'
+import { consultarLogs } from '../api/logs'
 
 const typeColors = {
   CREAR: 'bg-emerald-50 text-emerald-700',
@@ -17,7 +12,67 @@ const typeColors = {
   CONSULTA_RAG: 'bg-violet-50 text-violet-700',
 }
 
+function formatFecha(value) {
+  if (!value) return '—'
+  // El backend devuelve timestamps sin sufijo de zona (UTC implícito desde PostgreSQL).
+  // Añadimos 'Z' para que el parser de Date lo interprete como UTC y luego
+  // lo convertimos a America/Bogota (UTC-5).
+  const iso = value.includes('T') ? value : value.replace(' ', 'T')
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 export default function Logs() {
+  const { getAccessTokenSilently } = useAuth0()
+  const toast = useToast()
+
+  const [filtros, setFiltros] = useState({ tipo: '', documento: '', fecha: '' })
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchLogs = useCallback(
+    async (params = {}) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await consultarLogs(params, getAccessTokenSilently)
+        setLogs(Array.isArray(data) ? data : data?.logs ?? [])
+      } catch (err) {
+        setError(err.message || 'Error al cargar los logs.')
+        toast.error(err.message || 'Error al cargar los logs.')
+        setLogs([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    [getAccessTokenSilently, toast],
+  )
+
+  useEffect(() => {
+    fetchLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleFilter = (e) => {
+    e?.preventDefault?.()
+    fetchLogs(filtros)
+  }
+
+  const setFiltro = (name, value) => {
+    setFiltros((prev) => ({ ...prev, [name]: value }))
+  }
+
   return (
     <div>
       <PageHeader
@@ -26,11 +81,15 @@ export default function Logs() {
       />
 
       {/* Filters */}
-      <div className="card mb-6">
+      <form onSubmit={handleFilter} className="card mb-6">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="sm:w-48">
             <label className="label">Tipo de transacción</label>
-            <select className="input-field text-sm" defaultValue="">
+            <select
+              className="input-field text-sm"
+              value={filtros.tipo}
+              onChange={(e) => setFiltro('tipo', e.target.value)}
+            >
               <option value="">Todos</option>
               <option value="CREAR">Crear</option>
               <option value="CONSULTAR">Consultar</option>
@@ -41,52 +100,97 @@ export default function Logs() {
           </div>
           <div className="sm:w-48">
             <label className="label">Documento</label>
-            <input type="text" className="input-field text-sm" placeholder="Nro. documento..." maxLength={10} />
+            <input
+              type="text"
+              className="input-field text-sm"
+              placeholder="Nro. documento..."
+              maxLength={10}
+              inputMode="numeric"
+              value={filtros.documento}
+              onChange={(e) => setFiltro('documento', e.target.value.replace(/\D/g, ''))}
+            />
           </div>
           <div className="sm:w-48">
             <label className="label">Fecha</label>
-            <input type="date" className="input-field text-sm" />
+            <input
+              type="date"
+              className="input-field text-sm"
+              value={filtros.fecha}
+              onChange={(e) => setFiltro('fecha', e.target.value)}
+            />
           </div>
           <div className="flex items-end">
-            <button className="btn-primary py-2.5 px-5 text-sm">Filtrar</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary py-2.5 px-5 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Filtrando...' : 'Filtrar'}
+            </button>
           </div>
         </div>
-      </div>
+      </form>
 
       {/* Table */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-surface-100">
-                {['ID', 'Fecha', 'Tipo', 'Documento', 'Detalle'].map((col) => (
-                  <th key={col} className="text-left text-xs font-semibold text-surface-500 uppercase tracking-wider px-6 py-3 font-body whitespace-nowrap">
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {mockLogs.map((log) => (
-                <tr key={log.id_log} className="border-b border-surface-50 hover:bg-surface-50/50 transition-colors">
-                  <td className="px-6 py-3.5 text-sm font-mono text-surface-600">#{log.id_log}</td>
-                  <td className="px-6 py-3.5 text-sm text-surface-600 whitespace-nowrap">{log.fecha_transaccion}</td>
-                  <td className="px-6 py-3.5">
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-md text-xs font-medium ${typeColors[log.tipo_transaccion] || 'bg-surface-100 text-surface-600'}`}>
-                      {log.tipo_transaccion}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3.5 text-sm font-mono text-surface-600">{log.documento_relacionado || '—'}</td>
-                  <td className="px-6 py-3.5 text-sm text-surface-600 max-w-xs truncate">{log.detalle}</td>
+        {loading ? (
+          <div className="flex flex-col items-center py-16 gap-3">
+            <div className="w-8 h-8 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
+            <p className="text-sm text-surface-500">Cargando logs...</p>
+          </div>
+        ) : error ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-surface-500">No se encontraron registros con los filtros actuales.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-surface-100">
+                  {['ID', 'Fecha', 'Tipo', 'Documento', 'Detalle'].map((col) => (
+                    <th key={col} className="text-left text-xs font-semibold text-surface-500 uppercase tracking-wider px-6 py-3 font-body whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id_log} className="border-b border-surface-50 hover:bg-surface-50/50 transition-colors">
+                    <td className="px-6 py-3.5 text-sm font-mono text-surface-600">#{log.id_log}</td>
+                    <td className="px-6 py-3.5 text-sm text-surface-600 whitespace-nowrap">{formatFecha(log.fecha_transaccion)}</td>
+                    <td className="px-6 py-3.5">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-md text-xs font-medium ${typeColors[log.tipo_transaccion] || 'bg-surface-100 text-surface-600'}`}>
+                        {log.tipo_transaccion}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5 text-sm font-mono text-surface-600">{log.documento_relacionado || '—'}</td>
+                    <td className="px-6 py-3.5 max-w-xs">
+                      <p className="text-sm text-surface-600 truncate" title={log.detalle || log.pregunta_rag || ''}>
+                        {log.detalle || log.pregunta_rag || '—'}
+                      </p>
+                      {log.email_usuario && (
+                        <p className="text-xs text-surface-400 mt-0.5">
+                          Por usuario: <span className="font-medium text-surface-500">{log.email_usuario}</span>
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        <div className="px-6 py-3 border-t border-surface-100 bg-surface-50/50 flex items-center justify-between">
-          <p className="text-xs text-surface-500">Mostrando {mockLogs.length} registros</p>
-        </div>
+        {!loading && !error && logs.length > 0 && (
+          <div className="px-6 py-3 border-t border-surface-100 bg-surface-50/50 flex items-center justify-between">
+            <p className="text-xs text-surface-500">Mostrando {logs.length} registros</p>
+          </div>
+        )}
       </div>
     </div>
   )

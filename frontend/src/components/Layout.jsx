@@ -2,6 +2,30 @@ import { useState } from 'react'
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
 
+function Avatar({ picture, name }) {
+  const [imgError, setImgError] = useState(false)
+  const initials = name
+    ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?'
+
+  if (picture && !imgError) {
+    return (
+      <img
+        src={picture}
+        alt="Perfil"
+        className="w-full h-full object-cover"
+        onError={() => setImgError(true)}
+      />
+    )
+  }
+
+  return (
+    <span className="w-full h-full flex items-center justify-center bg-brand-100 text-brand-700 text-xs font-semibold">
+      {initials}
+    </span>
+  )
+}
+
 const navItems = [
   {
     to: '/app',
@@ -153,8 +177,8 @@ export default function Layout() {
           <div className="flex items-center gap-3">
             
             {/* Foto de perfil de Auth0 */}
-            <div className="w-9 h-9 rounded-full overflow-hidden border border-gray-200">
-              <img src={user?.picture} alt="Perfil" className="w-full h-full object-cover" />
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-gray-200 flex-shrink-0">
+              <Avatar picture={user?.picture} name={user?.name} />
             </div>
             
             {/* Datos reales de Auth0 */}

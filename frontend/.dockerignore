@@ -3,6 +3,5 @@ dist
 dist-ssr
 .vite
 .git
-.env
 .env.local
 .env.*.local

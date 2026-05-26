@@ -6,6 +6,7 @@ from uuid import UUID
 class LogOut(BaseModel):
     id_log: int
     usuario_id: Optional[UUID] = None
+    email_usuario: Optional[str] = None
     fecha_transaccion: datetime
     tipo_transaccion: str
     documento_relacionado: Optional[str] = None

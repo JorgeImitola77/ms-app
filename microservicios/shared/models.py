@@ -19,7 +19,6 @@ class PersonaCreate(BaseModel):
 
 class PersonaUpdate(BaseModel):
     tipo_documento: Optional[Literal['Tarjeta de identidad', 'Cédula']] = None
-    nro_documento: Optional[str] = Field(default=None, pattern=r'^[0-9]{1,10}$')
     primer_nombre: Optional[str] = Field(default=None, max_length=30, pattern=r'^[^0-9]+$')
     segundo_nombre: Optional[str] = Field(default=None, max_length=30, pattern=r'^[^0-9]+$')
     apellidos: Optional[str] = Field(default=None, max_length=60, pattern=r'^[^0-9]+$')

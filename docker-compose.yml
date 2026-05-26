@@ -73,14 +73,15 @@ services:
   # ---------------------------------------------------------
   # 4. Microservicio: Consulta (GET) — diseñado para escalar
   #    Usar:  docker compose up -d --scale consulta=N
-  #    El rango de puertos permite hasta 11 réplicas.
+  #    El rango de puertos empieza en 8010 para no colisionar
+  #    con los puertos fijos de borrado (8004) y log (8005).
   # ---------------------------------------------------------
   consulta:
     build: ./microservicios/ms-consultar
     restart: unless-stopped
     env_file: .env
     ports:
-      - "8003-8013:8000"
+      - "8003:8000"
     volumes:
       - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads:ro
@@ -152,6 +153,10 @@ services:
 
   # ---------------------------------------------------------
   # 8. Frontend — React + Vite + Tailwind
+  #    El volumen monta el código fuente del host dentro del
+  #    contenedor para que Vite HMR detecte cambios en tiempo real.
+  #    node_modules queda aislado con un volumen anónimo para no
+  #    pisar los módulos instalados dentro del contenedor.
   # ---------------------------------------------------------
   frontend:
     build: ./frontend
@@ -159,6 +164,9 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - creacion
       - modificacion
