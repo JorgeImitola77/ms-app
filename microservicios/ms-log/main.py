@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import asyncpg
-from schemas import LogOut
+from schemas import LogOut, LogRagIn
 from shared.auth import validar_token_auth0
 from datetime import date
 
@@ -59,10 +59,34 @@ async def consultar_logs(
 
         query += " ORDER BY fecha_transaccion DESC"
         registros = await conn.fetch(query, *valores)
-        
+
         # Convertimos los 'Records' de asyncpg a diccionarios de Python
         return [dict(r) for r in registros]
-        
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await conn.close()
+
+
+@app.post("/api/logs/internal", status_code=status.HTTP_201_CREATED)
+async def registrar_log_rag(log: LogRagIn):
+    """
+    Endpoint interno (red privada app_network) usado por el workflow RAG de n8n.
+    No exige JWT porque n8n no porta token de usuario; el usuario_id llega en el body.
+    Registra la transacción CONSULTA_RAG con su pregunta y respuesta.
+    """
+    conn = await get_db_connection()
+    try:
+        detalle = log.detalle or f"Consulta RAG: {log.pregunta_rag}"
+        id_log = await conn.fetchval(
+            """INSERT INTO logs
+               (usuario_id, tipo_transaccion, pregunta_rag, respuesta_rag, detalle)
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING id_log""",
+            log.usuario_id, log.tipo_transaccion, log.pregunta_rag, log.respuesta_rag, detalle
+        )
+        return {"status": "success", "id_log": id_log}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
