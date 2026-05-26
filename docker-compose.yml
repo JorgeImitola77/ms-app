@@ -130,9 +130,11 @@ services:
 
   # ---------------------------------------------------------
   # 7. n8n — motor de automatización + RAG
+  #    Conecta a PostgreSQL por la red interna app_network
+  #    usando el host "postgres" (nombre del servicio).
   # ---------------------------------------------------------
   n8n:
-    image: docker.n8n.io/n8nio/n8n
+    image: n8nio/n8n:latest
     container_name: explorapp_n8n
     restart: unless-stopped
     env_file: .env
@@ -141,10 +143,17 @@ services:
       N8N_PORT: ${N8N_PORT}
       N8N_PROTOCOL: ${N8N_PROTOCOL}
       NODE_ENV: ${NODE_ENV}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Bogota}
     ports:
       - "${N8N_PUBLIC_PORT:-5678}:5678"
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows:ro
+      - ./n8n/credentials:/home/node/credentials:ro
     depends_on:
       postgres:
         condition: service_healthy
