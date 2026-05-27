@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth0 } from "@auth0/auth0-react";
 
@@ -19,8 +20,33 @@ const RutaPrivada = ({ children }) => {
   return children;
 };
 
+// Escucha el evento global `auth:expired` que emite el cliente HTTP cuando
+// detecta un JWT vencido (401 desde el backend o fallo de getTokenSilently).
+// Fuerza un logout local y redirige a Auth0 para volver a autenticar.
+function useAuthExpiredRedirect() {
+  const { isAuthenticated, loginWithRedirect, logout } = useAuth0()
+  const redirectingRef = useRef(false)
+
+  useEffect(() => {
+    const handler = () => {
+      if (redirectingRef.current) return
+      redirectingRef.current = true
+      if (isAuthenticated) {
+        // Limpiamos el estado local (token expirado) sin volver a Auth0
+        // para que el siguiente loginWithRedirect pida credenciales.
+        logout({ openUrl: false, logoutParams: { returnTo: window.location.origin } })
+      }
+      loginWithRedirect({ appState: { returnTo: '/app' } })
+    }
+
+    window.addEventListener('auth:expired', handler)
+    return () => window.removeEventListener('auth:expired', handler)
+  }, [isAuthenticated, loginWithRedirect, logout])
+}
+
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth0();
+  useAuthExpiredRedirect()
 
   if (isLoading) {
     return (

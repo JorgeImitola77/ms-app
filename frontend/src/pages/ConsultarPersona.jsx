@@ -5,6 +5,7 @@ import SearchBar from '../components/ui/SearchBar'
 import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toast'
 import { consultarPersona } from '../api/personas'
+import { ERROR_MESSAGES } from '../api/client'
 
 export default function ConsultarPersona() {
   const { getAccessTokenSilently } = useAuth0()
@@ -15,9 +16,6 @@ export default function ConsultarPersona() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searched, setSearched] = useState(false)
-
-  const SERVICE_DOWN_MSG =
-    'El servicio de consulta no está disponible en este momento. Intenta de nuevo en unos segundos.'
 
   const handleSearch = async (doc) => {
     if (!doc || !/^\d{1,10}$/.test(doc)) {
@@ -35,8 +33,12 @@ export default function ConsultarPersona() {
       if (err.status === 404) {
         setError('No se encontró ninguna persona con ese documento.')
       } else if (err.status === 503) {
-        setError(SERVICE_DOWN_MSG)
-        toast.error(SERVICE_DOWN_MSG)
+        const msg = err.message || ERROR_MESSAGES.CONSULTA_UNAVAILABLE
+        setError(msg)
+        toast.error(msg)
+      } else if (err.status === 401) {
+        // El cliente HTTP ya disparó `auth:expired`; sólo informamos.
+        setError(err.message)
       } else {
         setError(err.message || 'Error al consultar la persona.')
         toast.error(err.message || 'Error al consultar la persona.')

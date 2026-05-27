@@ -5,6 +5,7 @@ from typing import List, Optional
 import asyncpg
 from schemas import LogOut, LogRagIn
 from shared.auth import validar_token_auth0
+from shared.errors import raise_for_unexpected, is_db_connection_error, DB_UNAVAILABLE_MSG
 from datetime import date
 
 app = FastAPI(title="Microservicio Logs (Auth0)")
@@ -24,10 +25,19 @@ async def get_db_connection():
 async def consultar_logs(
     tipo: Optional[str] = None,
     documento: Optional[str] = None,
-    fecha: Optional[str] = None, 
-    token_payload: dict = Depends(validar_token_auth0) # Validando acceso real a auditoría
+    fecha: Optional[str] = None,
+    token_payload: dict = Depends(validar_token_auth0)
 ):
-    conn = await get_db_connection()
+    try:
+        conn = await get_db_connection()
+    except Exception as exc:
+        if is_db_connection_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=DB_UNAVAILABLE_MSG,
+            )
+        raise_for_unexpected(exc)
+
     try:
         query = """
             SELECT l.*, u.email AS email_usuario
@@ -41,16 +51,15 @@ async def consultar_logs(
             query += f" AND tipo_transaccion = ${contador}"
             valores.append(tipo)
             contador += 1
-            
+
         if documento:
             query += f" AND documento_relacionado = ${contador}"
             valores.append(documento)
             contador += 1
-            
+
         if fecha:
             query += f" AND DATE(fecha_transaccion) = ${contador}"
             try:
-                # Convertimos el texto (YYYY-MM-DD) a un objeto de fecha real
                 fecha_obj = date.fromisoformat(fecha)
                 valores.append(fecha_obj)
             except ValueError:
@@ -60,16 +69,12 @@ async def consultar_logs(
         query += " ORDER BY fecha_transaccion DESC"
         registros = await conn.fetch(query, *valores)
 
-        # Convertimos los 'Records' de asyncpg a diccionarios de Python
         return [dict(r) for r in registros]
 
     except HTTPException:
-        # Errores de validación (p. ej. 400 por fecha inválida) deben
-        # propagarse tal cual; sin esta rama, el except genérico los
-        # envolvía como 500.
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise_for_unexpected(exc)
     finally:
         await conn.close()
 
@@ -82,7 +87,16 @@ async def registrar_log_rag(log: LogRagIn):
     llega en el body como `auth0_id` (sub del JWT) y se resuelve al UUID local.
     Registra la transacción CONSULTA_RAG con su pregunta y respuesta.
     """
-    conn = await get_db_connection()
+    try:
+        conn = await get_db_connection()
+    except Exception as exc:
+        if is_db_connection_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=DB_UNAVAILABLE_MSG,
+            )
+        raise_for_unexpected(exc)
+
     try:
         usuario_uuid = log.usuario_id
         if usuario_uuid is None and log.auth0_id:
@@ -90,7 +104,6 @@ async def registrar_log_rag(log: LogRagIn):
                 "SELECT usuario_id FROM usuarios WHERE auth0_id = $1", log.auth0_id
             )
             if usuario_uuid is None:
-                # Auto-aprovisionamiento: el usuario llegó por primera vez vía RAG.
                 usuario_uuid = await conn.fetchval(
                     "INSERT INTO usuarios (auth0_id, email) VALUES ($1, $2) RETURNING usuario_id",
                     log.auth0_id, log.email,
@@ -105,7 +118,9 @@ async def registrar_log_rag(log: LogRagIn):
             usuario_uuid, log.tipo_transaccion, log.pregunta_rag, log.respuesta_rag, detalle
         )
         return {"status": "success", "id_log": id_log, "usuario_id": str(usuario_uuid) if usuario_uuid else None}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise_for_unexpected(exc)
     finally:
         await conn.close()

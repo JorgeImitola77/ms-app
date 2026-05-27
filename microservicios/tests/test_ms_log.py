@@ -105,13 +105,28 @@ def test_logs_fecha_invalida_devuelve_400(log_client):
 
 
 def test_logs_error_db_devuelve_500(log_client):
+    """Errores inesperados → 500 con mensaje amigable; el detalle no debe
+    contener la representación textual de la excepción interna."""
     client, conn = log_client
     conn.fetch.side_effect = RuntimeError("explota")
 
     resp = client.get("/api/logs")
 
     assert resp.status_code == 500
-    assert "explota" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert "explota" not in detail
+    assert "error interno" in detail.lower()
+
+
+def test_logs_db_caida_devuelve_503(log_client):
+    """BD inaccesible → 503 con mensaje amigable."""
+    client, conn = log_client
+    conn.fetch.side_effect = ConnectionError("refused")
+
+    resp = client.get("/api/logs")
+
+    assert resp.status_code == 503
+    assert "base de datos" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

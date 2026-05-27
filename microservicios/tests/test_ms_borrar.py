@@ -33,10 +33,25 @@ def test_borrar_persona_404_no_existe(borrar_client):
 
 
 def test_borrar_persona_error_db_devuelve_500(borrar_client):
+    """Un error inesperado devuelve 500 con mensaje amigable; el ``str(exc)``
+    no debe propagarse al cliente."""
     client, conn = borrar_client
     conn.fetchval.side_effect = RuntimeError("conn perdida")
 
     resp = client.delete("/api/personas/1234567890")
 
     assert resp.status_code == 500
-    assert "conn perdida" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert "conn perdida" not in detail
+    assert "error interno" in detail.lower()
+
+
+def test_borrar_persona_db_caida_devuelve_503(borrar_client):
+    """BD inaccesible → 503 con mensaje amigable."""
+    client, conn = borrar_client
+    conn.fetchval.side_effect = OSError("connection reset")
+
+    resp = client.delete("/api/personas/1234567890")
+
+    assert resp.status_code == 503
+    assert "base de datos" in resp.json()["detail"].lower()
