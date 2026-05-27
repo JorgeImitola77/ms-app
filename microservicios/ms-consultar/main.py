@@ -20,6 +20,10 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
 async def get_db_connection():
     return await asyncpg.connect(DATABASE_URL)
 
