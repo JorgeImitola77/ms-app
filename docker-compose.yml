@@ -73,21 +73,51 @@ services:
   # ---------------------------------------------------------
   # 4. Microservicio: Consulta (GET) — diseñado para escalar
   #    Usar:  docker compose up -d --scale consulta=N
-  #    El rango de puertos empieza en 8010 para no colisionar
-  #    con los puertos fijos de borrado (8004) y log (8005).
+  #    No publica puertos directamente: el acceso desde el
+  #    host es a través de consulta-lb (nginx) en :8003,
+  #    que reparte las peticiones entre las réplicas y
+  #    devuelve 503 cuando el servicio está apagado (RNF3).
   # ---------------------------------------------------------
   consulta:
     build: ./microservicios/ms-consultar
     restart: unless-stopped
     env_file: .env
-    ports:
-      - "8003:8000"
+    expose:
+      - "8000"
     volumes:
       - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads:ro
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ---------------------------------------------------------
+  # 4.1 Load balancer del microservicio Consulta
+  #     - Expone :8003 al host (lo que antes hacía consulta).
+  #     - Hace round-robin entre las N réplicas del servicio
+  #       consulta usando el DNS interno de Docker.
+  #     - Devuelve 503 amigable si no hay réplicas activas.
+  # ---------------------------------------------------------
+  consulta-lb:
+    image: nginx:1.27-alpine
+    container_name: explorapp_consulta_lb
+    restart: unless-stopped
+    ports:
+      - "${MS_CONSULTA_PORT:-8003}:8000"
+    volumes:
+      - ./nginx/consulta-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      consulta:
+        condition: service_healthy
+        required: false
     networks:
       - app_network
 
@@ -176,6 +206,7 @@ services:
       - VITE_AUTH0_DOMAIN=${AUTH0_DOMAIN}
       - VITE_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
       - VITE_AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      - VITE_N8N_RAG_URL=${VITE_N8N_RAG_URL:-http://localhost:5678/webhook/rag-consulta}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:
@@ -184,7 +215,7 @@ services:
     depends_on:
       - creacion
       - modificacion
-      - consulta
+      - consulta-lb
       - borrado
       - log
     networks:

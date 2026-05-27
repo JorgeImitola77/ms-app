@@ -42,7 +42,11 @@ venv/
 env/
 ENV/
 .venv/
+.venv-test/
 .env.venv/
+
+# Coverage HTML local (el reporte de texto sí se commitea)
+microservicios/coverage_html/
 
 # =========================
 # Node / Frontend
@@ -113,3 +117,11 @@ desktop.ini
 # =========================
 logs/
 *.log
+
+# =========================
+# Load testing (locust)
+# =========================
+loadtest/reports/*.csv
+loadtest/reports/*.html
+!loadtest/reports/REPORTE.md
+!loadtest/reports/.gitkeep

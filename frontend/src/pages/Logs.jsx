@@ -159,28 +159,49 @@ export default function Logs() {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id_log} className="border-b border-surface-50 hover:bg-surface-50/50 transition-colors">
-                    <td className="px-6 py-3.5 text-sm font-mono text-surface-600">#{log.id_log}</td>
-                    <td className="px-6 py-3.5 text-sm text-surface-600 whitespace-nowrap">{formatFecha(log.fecha_transaccion)}</td>
-                    <td className="px-6 py-3.5">
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-md text-xs font-medium ${typeColors[log.tipo_transaccion] || 'bg-surface-100 text-surface-600'}`}>
-                        {log.tipo_transaccion}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3.5 text-sm font-mono text-surface-600">{log.documento_relacionado || '—'}</td>
-                    <td className="px-6 py-3.5 max-w-xs">
-                      <p className="text-sm text-surface-600 truncate" title={log.detalle || log.pregunta_rag || ''}>
-                        {log.detalle || log.pregunta_rag || '—'}
-                      </p>
-                      {log.email_usuario && (
-                        <p className="text-xs text-surface-400 mt-0.5">
-                          Por usuario: <span className="font-medium text-surface-500">{log.email_usuario}</span>
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {logs.map((log) => {
+                  const isRag = log.tipo_transaccion === 'CONSULTA_RAG'
+                  return (
+                    <tr key={log.id_log} className="border-b border-surface-50 hover:bg-surface-50/50 transition-colors align-top">
+                      <td className="px-6 py-3.5 text-sm font-mono text-surface-600">#{log.id_log}</td>
+                      <td className="px-6 py-3.5 text-sm text-surface-600 whitespace-nowrap">{formatFecha(log.fecha_transaccion)}</td>
+                      <td className="px-6 py-3.5">
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-md text-xs font-medium ${typeColors[log.tipo_transaccion] || 'bg-surface-100 text-surface-600'}`}>
+                          {log.tipo_transaccion}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 text-sm font-mono text-surface-600">{log.documento_relacionado || '—'}</td>
+                      <td className="px-6 py-3.5">
+                        {isRag ? (
+                          <div className="space-y-1.5 max-w-2xl">
+                            {log.pregunta_rag && (
+                              <p className="text-sm text-surface-700 whitespace-pre-wrap break-words">
+                                <span className="font-semibold text-violet-700">P:</span> {log.pregunta_rag}
+                              </p>
+                            )}
+                            {log.respuesta_rag && (
+                              <p className="text-sm text-surface-600 whitespace-pre-wrap break-words">
+                                <span className="font-semibold text-violet-700">R:</span> {log.respuesta_rag}
+                              </p>
+                            )}
+                            {log.detalle && (
+                              <p className="text-xs text-surface-400 italic break-words">{log.detalle}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-surface-600 whitespace-pre-wrap break-words max-w-xl">
+                            {log.detalle || '—'}
+                          </p>
+                        )}
+                        {log.email_usuario && (
+                          <p className="text-xs text-surface-400 mt-1.5">
+                            Por usuario: <span className="font-medium text-surface-500">{log.email_usuario}</span>
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

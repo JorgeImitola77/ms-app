@@ -5,6 +5,9 @@ from uuid import UUID
 
 class LogRagIn(BaseModel):
     tipo_transaccion: str = "CONSULTA_RAG"
+    # auth0_id es el 'sub' del JWT (p.ej. 'auth0|abc'); el servicio lo resuelve a usuario_id (UUID).
+    auth0_id: Optional[str] = None
+    email: Optional[str] = None
     usuario_id: Optional[UUID] = None
     pregunta_rag: str
     respuesta_rag: str

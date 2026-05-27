@@ -5,6 +5,7 @@ import SearchBar from '../components/ui/SearchBar'
 import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toast'
 import { consultarPersona } from '../api/personas'
+import { ERROR_MESSAGES } from '../api/client'
 
 export default function ConsultarPersona() {
   const { getAccessTokenSilently } = useAuth0()
@@ -31,6 +32,13 @@ export default function ConsultarPersona() {
     } catch (err) {
       if (err.status === 404) {
         setError('No se encontró ninguna persona con ese documento.')
+      } else if (err.status === 503) {
+        const msg = err.message || ERROR_MESSAGES.CONSULTA_UNAVAILABLE
+        setError(msg)
+        toast.error(msg)
+      } else if (err.status === 401) {
+        // El cliente HTTP ya disparó `auth:expired`; sólo informamos.
+        setError(err.message)
       } else {
         setError(err.message || 'Error al consultar la persona.')
         toast.error(err.message || 'Error al consultar la persona.')

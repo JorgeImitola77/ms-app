@@ -42,6 +42,8 @@ Pygments==2.20.0
 pynndescent==0.6.0
 pyparsing==3.2.1
 pytest==9.0.3
+pytest-asyncio==1.0.0
+pytest-cov==6.0.0
 python-dateutil==2.9.0.post0
 python-jose==3.5.0
 python-multipart==0.0.20
