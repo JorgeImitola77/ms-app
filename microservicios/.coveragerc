@@ -1,0 +1,25 @@
+[run]
+# Coverage solo del código de producción (excluye los propios tests, el
+# conftest y dependencias del venv). Así el porcentaje refleja qué tanto del
+# código real está cubierto, no qué tanto se ejecutan los propios tests.
+branch = True
+source =
+    ms-borrar
+    ms-consultar
+    ms-crear
+    ms-log
+    ms-modificar
+    shared
+omit =
+    */tests/*
+    */__pycache__/*
+    */.venv*/*
+
+[report]
+show_missing = True
+skip_covered = False
+precision = 1
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
