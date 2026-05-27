@@ -190,6 +190,16 @@ Las migraciones futuras se añaden como nuevos archivos `db/NN_<descripcion>.sql
 
 ---
 
+## Evidencia de pruebas E2E
+
+Las pruebas end-to-end de los tres casos de uso definidos en la sección 10
+del documento de diseño están documentadas en
+[`docs/evidencias-e2e/README.md`](docs/evidencias-e2e/README.md), con
+screenshots, consultas SQL de verificación y veredicto por caso.
+
+
+---
+
 ## Licencia
 
 Proyecto académico desarrollado en la Universidad del Norte. Uso restringido
