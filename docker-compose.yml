@@ -73,21 +73,43 @@ services:
   # ---------------------------------------------------------
   # 4. Microservicio: Consulta (GET) — diseñado para escalar
   #    Usar:  docker compose up -d --scale consulta=N
-  #    El rango de puertos empieza en 8010 para no colisionar
-  #    con los puertos fijos de borrado (8004) y log (8005).
+  #    No publica puertos directamente: el acceso desde el
+  #    host es a través de consulta-lb (nginx) en :8003,
+  #    que reparte las peticiones entre las réplicas y
+  #    devuelve 503 cuando el servicio está apagado (RNF3).
   # ---------------------------------------------------------
   consulta:
     build: ./microservicios/ms-consultar
     restart: unless-stopped
     env_file: .env
-    ports:
-      - "8003:8000"
+    expose:
+      - "8000"
     volumes:
       - ./microservicios/shared:/app/shared:ro
       - photos:/app/uploads:ro
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - app_network
+
+  # ---------------------------------------------------------
+  # 4.1 Load balancer del microservicio Consulta
+  #     - Expone :8003 al host (lo que antes hacía consulta).
+  #     - Hace round-robin entre las N réplicas del servicio
+  #       consulta usando el DNS interno de Docker.
+  #     - Devuelve 503 amigable si no hay réplicas activas.
+  # ---------------------------------------------------------
+  consulta-lb:
+    image: nginx:1.27-alpine
+    container_name: explorapp_consulta_lb
+    restart: unless-stopped
+    ports:
+      - "${MS_CONSULTA_PORT:-8003}:8000"
+    volumes:
+      - ./nginx/consulta-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - consulta
     networks:
       - app_network
 
@@ -185,7 +207,7 @@ services:
     depends_on:
       - creacion
       - modificacion
-      - consulta
+      - consulta-lb
       - borrado
       - log
     networks:

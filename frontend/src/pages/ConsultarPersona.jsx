@@ -16,6 +16,9 @@ export default function ConsultarPersona() {
   const [error, setError] = useState(null)
   const [searched, setSearched] = useState(false)
 
+  const SERVICE_DOWN_MSG =
+    'El servicio de consulta no está disponible en este momento. Intenta de nuevo en unos segundos.'
+
   const handleSearch = async (doc) => {
     if (!doc || !/^\d{1,10}$/.test(doc)) {
       toast.error('Ingresa un documento válido (1-10 dígitos).')
@@ -31,6 +34,9 @@ export default function ConsultarPersona() {
     } catch (err) {
       if (err.status === 404) {
         setError('No se encontró ninguna persona con ese documento.')
+      } else if (err.status === 503) {
+        setError(SERVICE_DOWN_MSG)
+        toast.error(SERVICE_DOWN_MSG)
       } else {
         setError(err.message || 'Error al consultar la persona.')
         toast.error(err.message || 'Error al consultar la persona.')
