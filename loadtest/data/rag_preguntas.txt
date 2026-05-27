@@ -1,0 +1,10 @@
+¿Cuántas personas hay registradas en el sistema?
+Lista las personas creadas durante el último mes.
+¿Cuál es la persona con mayor edad registrada?
+¿Cuántas personas hay por género?
+Muéstrame las personas registradas con tipo de documento CC.
+¿Cuál es el correo de la persona con documento 1020304050?
+¿Qué porcentaje de personas tiene fecha de nacimiento antes de 1990?
+Listar los últimos 5 registros creados.
+¿Quién es la persona más joven registrada?
+Dame un resumen de la base de personas.

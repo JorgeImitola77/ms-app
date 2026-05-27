@@ -117,3 +117,12 @@ desktop.ini
 # =========================
 logs/
 *.log
+
+# =========================
+# Load testing (locust)
+# =========================
+.venv-loadtest/
+loadtest/reports/*.csv
+loadtest/reports/*.html
+!loadtest/reports/REPORTE.md
+!loadtest/reports/.gitkeep
