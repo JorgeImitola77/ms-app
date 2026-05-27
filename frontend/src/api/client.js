@@ -8,7 +8,17 @@ export async function apiFetch(url, getToken, options = {}) {
     ...(options.headers || {}),
   }
 
-  const res = await fetch(url, { ...options, headers })
+  let res
+  try {
+    res = await fetch(url, { ...options, headers })
+  } catch (networkErr) {
+    // El contenedor está apagado o no hay red: lo tratamos como 503
+    // para que la UI muestre el mismo mensaje amigable.
+    const error = new Error('El servicio no está disponible en este momento.')
+    error.status = 503
+    error.cause = networkErr
+    throw error
+  }
 
   // 204 No Content (típico en DELETE) — devolvemos null sin parsear.
   if (res.status === 204) return null
