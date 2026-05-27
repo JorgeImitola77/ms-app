@@ -73,20 +73,33 @@ async def consultar_logs(
 async def registrar_log_rag(log: LogRagIn):
     """
     Endpoint interno (red privada app_network) usado por el workflow RAG de n8n.
-    No exige JWT porque n8n no porta token de usuario; el usuario_id llega en el body.
+    No exige JWT porque n8n no porta token de usuario; el identificador del usuario
+    llega en el body como `auth0_id` (sub del JWT) y se resuelve al UUID local.
     Registra la transacción CONSULTA_RAG con su pregunta y respuesta.
     """
     conn = await get_db_connection()
     try:
+        usuario_uuid = log.usuario_id
+        if usuario_uuid is None and log.auth0_id:
+            usuario_uuid = await conn.fetchval(
+                "SELECT usuario_id FROM usuarios WHERE auth0_id = $1", log.auth0_id
+            )
+            if usuario_uuid is None:
+                # Auto-aprovisionamiento: el usuario llegó por primera vez vía RAG.
+                usuario_uuid = await conn.fetchval(
+                    "INSERT INTO usuarios (auth0_id, email) VALUES ($1, $2) RETURNING usuario_id",
+                    log.auth0_id, log.email,
+                )
+
         detalle = log.detalle or f"Consulta RAG: {log.pregunta_rag}"
         id_log = await conn.fetchval(
             """INSERT INTO logs
                (usuario_id, tipo_transaccion, pregunta_rag, respuesta_rag, detalle)
                VALUES ($1, $2, $3, $4, $5)
                RETURNING id_log""",
-            log.usuario_id, log.tipo_transaccion, log.pregunta_rag, log.respuesta_rag, detalle
+            usuario_uuid, log.tipo_transaccion, log.pregunta_rag, log.respuesta_rag, detalle
         )
-        return {"status": "success", "id_log": id_log}
+        return {"status": "success", "id_log": id_log, "usuario_id": str(usuario_uuid) if usuario_uuid else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

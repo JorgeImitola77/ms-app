@@ -47,7 +47,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extrae el SQL devuelto por Claude y valida que sea un SELECT seguro\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nlet sql = String(raw).trim();\nsql = sql.replace(/^```(?:sql)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\nsql = sql.replace(/;\\s*$/, '').trim();\nif (!/^SELECT\\b/i.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nif (/;\\s*\\S/.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nconst body = ($('Webhook RAG').first().json.body) || {};\nreturn [{\n  json: {\n    sql,\n    pregunta: body.pregunta || '',\n    usuario_id: body.usuario_id || null\n  }\n}];"
+        "jsCode": "// Extrae el SQL devuelto por Claude y valida que sea un SELECT seguro\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nlet sql = String(raw).trim();\nsql = sql.replace(/^```(?:sql)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\nsql = sql.replace(/;\\s*$/, '').trim();\nif (!/^SELECT\\b/i.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nif (/;\\s*\\S/.test(sql)) {\n  sql = 'SELECT NULL AS error';\n}\nconst body = ($('Webhook RAG').first().json.body) || {};\n// body.usuario_id corresponde al `sub` de Auth0 (p.ej. 'auth0|abc...').\n// El ms-log lo resuelve a UUID consultando la tabla `usuarios`.\nreturn [{\n  json: {\n    sql,\n    pregunta: body.pregunta || '',\n    auth0_id: body.usuario_id || body.auth0_id || null,\n    email: body.email || null\n  }\n}];"
       },
       "id": "node-sanitizar-sql",
       "name": "Sanitizar SQL",
@@ -76,7 +76,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Agrupa el resultado de Postgres en un unico contexto JSON para el LLM.\n// Filtra el item vacio que Postgres emite (alwaysOutputData) cuando no hay filas.\nconst rows = $input.all()\n  .map(it => it.json)\n  .filter(r => r && Object.keys(r).length > 0);\nconst sanit = $('Sanitizar SQL').first().json;\nreturn [{\n  json: {\n    pregunta: sanit.pregunta || '',\n    usuario_id: sanit.usuario_id || null,\n    sql: sanit.sql || '',\n    rows,\n    filas: rows.length,\n    contextoJson: JSON.stringify(rows, null, 2)\n  }\n}];"
+        "jsCode": "// Agrupa el resultado de Postgres en un unico contexto JSON para el LLM.\n// Filtra el item vacio que Postgres emite (alwaysOutputData) cuando no hay filas.\nconst rows = $input.all()\n  .map(it => it.json)\n  .filter(r => r && Object.keys(r).length > 0);\nconst sanit = $('Sanitizar SQL').first().json;\nreturn [{\n  json: {\n    pregunta: sanit.pregunta || '',\n    auth0_id: sanit.auth0_id || null,\n    email: sanit.email || null,\n    sql: sanit.sql || '',\n    rows,\n    filas: rows.length,\n    contextoJson: JSON.stringify(rows, null, 2)\n  }\n}];"
       },
       "id": "node-componer-contexto",
       "name": "Componer contexto",
@@ -116,7 +116,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extrae el texto final de Claude y arma el payload de respuesta + log\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nconst respuesta = String(raw).trim();\nconst ctx = $('Componer contexto').first().json;\nconst uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst usuario_id = uuidRe.test(String(ctx.usuario_id || '')) ? ctx.usuario_id : null;\nreturn [{\n  json: {\n    pregunta: ctx.pregunta,\n    respuesta,\n    sql: ctx.sql,\n    filas: ctx.filas || 0,\n    usuario_id\n  }\n}];"
+        "jsCode": "// Extrae el texto final de Claude y arma el payload de respuesta + log.\n// El identificador del usuario llega como auth0_id (sub del JWT); el ms-log lo resolverá a UUID.\nconst raw = ($json.content && $json.content[0] && $json.content[0].text) || '';\nconst respuesta = String(raw).trim();\nconst ctx = $('Componer contexto').first().json;\nreturn [{\n  json: {\n    pregunta: ctx.pregunta,\n    respuesta,\n    sql: ctx.sql,\n    filas: ctx.filas || 0,\n    auth0_id: ctx.auth0_id || null,\n    email: ctx.email || null\n  }\n}];"
       },
       "id": "node-componer-respuesta",
       "name": "Componer respuesta",
@@ -136,7 +136,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ tipo_transaccion: 'CONSULTA_RAG', usuario_id: $json.usuario_id, pregunta_rag: $json.pregunta, respuesta_rag: $json.respuesta, detalle: 'RAG: ' + ($json.filas || 0) + ' fila(s) | SQL: ' + ($json.sql || '') }) }}",
+        "jsonBody": "={{ JSON.stringify({ tipo_transaccion: 'CONSULTA_RAG', auth0_id: $json.auth0_id, email: $json.email, pregunta_rag: $json.pregunta, respuesta_rag: $json.respuesta, detalle: 'RAG: ' + ($json.filas || 0) + ' fila(s) | SQL: ' + ($json.sql || '') }) }}",
         "options": {}
       },
       "id": "node-log",
