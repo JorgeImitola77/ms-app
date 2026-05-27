@@ -8,11 +8,11 @@ proyecto).
 
 ## Escenarios
 
-| Escenario | Tag        | Endpoint                                             | Carga                            |
-|-----------|------------|------------------------------------------------------|----------------------------------|
-| A. Crear  | `crear`    | `POST :8001/api/personas` (multipart)                | 50 usuarios concurrentes / 1 min |
+| Escenario   | Tag        | Endpoint                                                | Carga                            |
+|-------------|------------|---------------------------------------------------------|----------------------------------|
+| A. Crear    | `crear`    | `POST :8001/api/personas` (multipart)                   | 50 usuarios concurrentes / 1 min |
 | B. Consulta | `consulta` | `GET :8003/api/personas/{doc}` (vía nginx LB, escala=3) | 100 usuarios concurrentes / 1 min |
-| C. RAG    | `rag`      | `POST :5678/webhook/rag-consulta`                    | 20 usuarios concurrentes / 1 min |
+| C. RAG      | `rag`      | `POST :5678/webhook/rag-consulta`                       | 20 usuarios concurrentes / 1 min |
 
 ## Prerrequisitos
 
@@ -21,29 +21,25 @@ proyecto).
    docker compose up -d --scale consulta=3
    ```
 
-2. **Instalar locust** en un venv local (no se ejecuta dentro de los
-   contenedores para no contaminar las métricas):
+2. **Instalar locust** en el venv de tests del proyecto (se reutiliza
+   `.venv-test`):
    ```powershell
-   python -m venv .venv-loadtest
-   .venv-loadtest\Scripts\Activate.ps1
-   pip install -r loadtest\requirements.txt
+   .venv-test\Scripts\python.exe -m pip install -r loadtest\requirements.txt
    ```
 
-3. **Obtener un access token de Auth0** (client_credentials). El proyecto ya
-   define `AUTH0_CLIENT_SECRET` en `.env`:
+3. **Obtener un access token de Auth0** (`client_credentials`). El proyecto
+   ya define `AUTH0_CLIENT_SECRET` en `.env`:
    ```powershell
-   # Carga las variables de .env en la sesión actual (PowerShell)
    Get-Content .env | ForEach-Object {
        if ($_ -match '^\s*([^#=]+)=(.*)$') {
-           $env:($Matches[1].Trim()) = $Matches[2].Trim()
+           Set-Item -Path "env:$($Matches[1].Trim())" -Value $Matches[2].Trim()
        }
    }
-   $env:LOADTEST_TOKEN = (python loadtest\get_token.py)
+   $env:LOADTEST_TOKEN = (.venv-test\Scripts\python.exe loadtest\get_token.py)
    ```
 
-   > Si la pipeline de tu Auth0 no permite client_credentials sobre la API,
-   > puedes pegar manualmente un JWT válido en `LOADTEST_TOKEN`. Para el
-   > webhook RAG el token también va en `Authorization: Bearer …`.
+   > Si tu Auth0 no permite client_credentials sobre la API, puedes pegar
+   > manualmente un JWT válido en `LOADTEST_TOKEN`.
 
 4. **(Opcional)** Sembrar `loadtest/data/seed_documentos.txt` con documentos
    reales de tu BD para que el escenario B haga hits 200 (no 404). Por defecto
@@ -51,30 +47,25 @@ proyecto).
 
 ## Ejecución
 
-Cada escenario tiene un `.bat` que lanza locust en modo `--headless` y vuelca
-resultados a `loadtest/reports/`:
+Los escenarios se lanzan desde el menú interactivo de `test.bat`:
 
 ```powershell
-loadtest\run-crear.bat
-loadtest\run-consulta.bat
-loadtest\run-rag.bat
+test.bat
 ```
 
-Variables opcionales:
-- `USERS`        — número de usuarios concurrentes (default por escenario)
-- `SPAWN_RATE`   — usuarios por segundo durante el ramp-up
-- `RUN_TIME`     — duración (default `1m`)
+Opciones del menú:
+- `[6]` Crear     — 50 usuarios x 1m
+- `[7]` Consulta  — 100 usuarios x 1m (recordar `--scale consulta=3`)
+- `[8]` RAG       — 20 usuarios x 1m
+- `[9]` Las 3 cargas secuencialmente
 
-Ejemplo (ramp-up más rápido):
-```powershell
-$env:SPAWN_RATE = "50"; loadtest\run-consulta.bat
-```
+Cada opción genera CSV/HTML en `loadtest/reports/`.
 
 ### Modo interactivo (UI web de locust)
 
 Si prefieres la UI:
 ```powershell
-locust -f loadtest\locustfile.py --host http://localhost --tags consulta
+.venv-test\Scripts\locust.exe -f loadtest\locustfile.py --host http://localhost --tags consulta
 ```
 Luego abre <http://localhost:8089>.
 
@@ -106,12 +97,13 @@ loadtest/
 ├── requirements.txt
 ├── locustfile.py          # 3 user classes (Crear / Consultar / Rag) + tags
 ├── get_token.py           # client_credentials -> access_token
-├── run-crear.bat
-├── run-consulta.bat
-├── run-rag.bat
 ├── data/
 │   ├── seed_documentos.txt
 │   └── rag_preguntas.txt
 └── reports/
     └── REPORTE.md         # plantilla a llenar tras cada corrida
 ```
+
+> La integración con el menú de `test.bat` (opciones 6-9) lanza locust en modo
+> `--headless` con los parámetros del card y vuelca los reportes a
+> `loadtest/reports/`. No hay scripts `.bat` propios dentro de `loadtest/`.
