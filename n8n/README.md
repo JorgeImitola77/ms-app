@@ -87,7 +87,9 @@ auditoría.
 ### Flujo de nodos
 
 1. **Webhook RAG** (`POST /webhook/rag-consulta`) — recibe
-   `{ "pregunta": string, "usuario_id": string }`.
+   `{ "pregunta": string, "usuario_id"|"auth0_id": string, "email"?: string }`.
+   `usuario_id` se mantiene por compatibilidad: contiene el `sub` de Auth0
+   (`auth0|...`), no un UUID. El ms-log lo resuelve a UUID local.
 2. **Claude - Generar SQL** — Claude traduce la pregunta a un `SELECT` de
    PostgreSQL (NL2SQL) acotado al esquema de `personas`.
 3. **Sanitizar SQL** — valida que sea un único `SELECT` (rechaza
@@ -98,8 +100,10 @@ auditoría.
 6. **Claude - Generar Respuesta** — Claude redacta la respuesta natural a partir
    del contexto + la pregunta.
 7. **Registrar Log** — `POST http://log:8000/api/logs/internal` con
-   `tipo_transaccion=CONSULTA_RAG`, `pregunta_rag`, `respuesta_rag`, `usuario_id`.
-   Tolera fallos (`continueRegularOutput`) para no romper la respuesta al usuario.
+   `tipo_transaccion=CONSULTA_RAG`, `pregunta_rag`, `respuesta_rag`, `auth0_id`,
+   `email`. ms-log resuelve el `auth0_id` al UUID de `usuarios` (autoaprovisiona
+   si el usuario aún no existe en la tabla). Tolera fallos
+   (`continueRegularOutput`) para no romper la respuesta al usuario.
 8. **Responder al Frontend** — devuelve `{ "pregunta", "respuesta" }`.
 
 ### Importar y configurar
@@ -116,7 +120,7 @@ auditoría.
 ```bash
 curl -X POST http://localhost:5678/webhook/rag-consulta \
   -H "Content-Type: application/json" \
-  -d '{"pregunta":"¿Cuál es el empleado más joven?","usuario_id":null}'
+  -d '{"pregunta":"¿Cuál es el empleado más joven?","usuario_id":"auth0|abc123","email":"demo@explorapp.com"}'
 ```
 
 ### Casos de prueba
@@ -131,3 +135,29 @@ curl -X POST http://localhost:5678/webhook/rag-consulta \
 - [x] Cada consulta queda registrada en `logs` con
       `tipo_transaccion = CONSULTA_RAG` (verificable vía `GET /api/logs?tipo=CONSULTA_RAG`).
 - [x] Workflow exportado a JSON y versionado en `n8n/workflows/`.
+
+## Validación de registro Q&A (CU 86e19rzr8 / RF6)
+
+1. Levantar el stack y entrar al chat RAG (frontend `/chat`) autenticado con Auth0.
+2. Enviar **al menos 5 preguntas distintas**, p. ej.:
+   - `¿Cuál es el empleado más joven?`
+   - `¿Cuántas personas hay registradas?`
+   - `Lista las personas con cédula.`
+   - `¿Quién es la persona más mayor?`
+   - `¿Cuántas personas registró el usuario X?` (cualquier consulta válida).
+3. Ir a la vista **Historial de Transacciones** del frontend y filtrar por
+   `Tipo de transacción = Consulta RAG`. Debe aparecer una fila por cada pregunta,
+   con `P:` (pregunta) y `R:` (respuesta) renderizados completos (sin truncar) y
+   con el correo del usuario que ejecutó la consulta.
+4. Validación SQL directa (opcional):
+
+   ```sql
+   SELECT id_log, usuario_id, fecha_transaccion, pregunta_rag, respuesta_rag
+   FROM logs WHERE tipo_transaccion = 'CONSULTA_RAG'
+   ORDER BY fecha_transaccion DESC LIMIT 10;
+   ```
+
+   - `usuario_id` debe estar poblado (UUID, no `NULL`) y corresponder al usuario
+     autenticado: `SELECT email FROM usuarios WHERE usuario_id = '<uuid>';`.
+   - `pregunta_rag` y `respuesta_rag` deben contener el texto completo (la
+     columna es `TEXT`, sin truncamiento).

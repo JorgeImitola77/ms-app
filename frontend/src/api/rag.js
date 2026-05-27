@@ -4,7 +4,7 @@
 const RAG_URL = import.meta.env.VITE_N8N_RAG_URL || 'http://localhost:5678/webhook/rag-consulta'
 const TIMEOUT_MS = 30000
 
-export async function consultaRAG({ pregunta, usuarioId }, getToken) {
+export async function consultaRAG({ pregunta, usuarioId, email }, getToken) {
   const token = await getToken()
 
   const controller = new AbortController()
@@ -18,7 +18,14 @@ export async function consultaRAG({ pregunta, usuarioId }, getToken) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ pregunta, usuario_id: usuarioId ?? null }),
+      body: JSON.stringify({
+        pregunta,
+        // El campo `usuario_id` se mantiene por retro-compatibilidad con el workflow
+        // de n8n; transporta el `sub` de Auth0 (auth0_id), no un UUID.
+        usuario_id: usuarioId ?? null,
+        auth0_id: usuarioId ?? null,
+        email: email ?? null,
+      }),
       signal: controller.signal,
     })
   } catch (err) {

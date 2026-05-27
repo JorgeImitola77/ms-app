@@ -74,7 +74,7 @@ export default function ChatRAG() {
 
       try {
         const data = await consultaRAG(
-          { pregunta, usuarioId: user?.sub ?? null },
+          { pregunta, usuarioId: user?.sub ?? null, email: user?.email ?? null },
           getAccessTokenSilently,
         )
         const respuesta =
