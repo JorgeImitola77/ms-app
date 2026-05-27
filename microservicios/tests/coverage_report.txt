@@ -1,0 +1,25 @@
+........................................................................ [ 60%]
+................................................                         [100%]
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.7-final-0 _______________
+
+Name                      Stmts   Miss Branch BrPart  Cover   Missing
+---------------------------------------------------------------------
+ms-borrar\main.py            29      1      2      0  96.8%   18
+ms-borrar\schemas.py          0      0      0      0 100.0%
+ms-consultar\main.py         32      1      2      0  97.1%   24
+ms-consultar\schemas.py      14      0      0      0 100.0%
+ms-crear\main.py             55      5      8      1  90.5%   22, 32-33, 80, 109
+ms-crear\schemas.py          25      0      4      0 100.0%
+ms-log\main.py               54      1      6      0  98.3%   21
+ms-log\schemas.py            20      0      0      0 100.0%
+ms-modificar\main.py         37      1      4      0  97.6%   19
+ms-modificar\schemas.py       5      0      0      0 100.0%
+shared\__init__.py            0      0      0      0 100.0%
+shared\auth.py               37      9      6      3  72.1%   27-28, 42->53, 43->42, 67-86
+shared\database.py           28      3      2      1  86.7%   13->17, 38-40
+shared\models.py             36      0      0      0 100.0%
+shared\orm_models.py         23      0      0      0 100.0%
+---------------------------------------------------------------------
+TOTAL                       395     21     34      5  93.9%
+120 passed in 1.10s
