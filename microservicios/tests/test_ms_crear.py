@@ -73,9 +73,8 @@ def test_crear_persona_422_falta_campo_obligatorio(crear_client):
 
 
 def test_crear_persona_documento_duplicado_devuelve_409(crear_client):
-    """El handler captura ``UniqueViolationError`` y devuelve 409 Conflict,
-    el código REST correcto para recursos duplicados (alineado con el card
-    86e19rzwg)."""
+    """El handler captura ``UniqueViolationError`` y devuelve 409 Conflict
+    con el mensaje amigable requerido por el card 86e19t0h2."""
     client, conn = crear_client
     conn.fetchrow.return_value = {
         "usuario_id": "11111111-1111-1111-1111-111111111111",
@@ -88,17 +87,49 @@ def test_crear_persona_documento_duplicado_devuelve_409(crear_client):
     resp = client.post("/api/personas", data=_form_persona())
 
     assert resp.status_code == 409
-    assert "ya se encuentra registrado" in resp.json()["detail"]
+    assert "Ya existe una persona con ese documento" in resp.json()["detail"]
 
 
 def test_crear_persona_error_generico_devuelve_500(crear_client):
+    """Un fallo no clasificado se traduce a 500 con un mensaje amigable;
+    nunca debe filtrar el ``str(exc)`` original al cliente."""
     client, conn = crear_client
     conn.fetchrow.side_effect = RuntimeError("boom")
 
     resp = client.post("/api/personas", data=_form_persona())
 
     assert resp.status_code == 500
-    assert "boom" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert "boom" not in detail
+    assert "error interno" in detail.lower()
+
+
+def test_crear_persona_db_caida_devuelve_503(crear_client):
+    """Cuando la conexión a la BD falla (OSError/asyncpg connection error)
+    el servicio responde 503 con mensaje amigable, no 500."""
+    client, conn = crear_client
+    conn.fetchrow.side_effect = ConnectionError("connection refused")
+
+    resp = client.post("/api/personas", data=_form_persona())
+
+    assert resp.status_code == 503
+    assert "base de datos" in resp.json()["detail"].lower()
+
+
+def test_crear_persona_pydantic_validation_422(crear_client):
+    """Datos inválidos a nivel de Pydantic (ej. correo mal formado) deben
+    rechazarse con 422 y el detalle estructurado de Pydantic."""
+    client, _ = crear_client
+    datos = _form_persona()
+    datos["correo"] = "no-es-correo"
+
+    resp = client.post("/api/personas", data=datos)
+
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    # Pydantic devuelve una lista de errores con loc/msg/type.
+    assert isinstance(detail, list)
+    assert any("correo" in str(err.get("loc", [])) for err in detail)
 
 
 def test_crear_persona_acepta_foto_dentro_del_limite(crear_client, tmp_path):

@@ -73,6 +73,7 @@ def test_modificar_persona_nombre_con_digitos_es_422(modificar_client):
 
 
 def test_modificar_persona_error_db_devuelve_500(modificar_client):
+    """Errores inesperados → 500 amigable sin filtrar ``str(exc)``."""
     client, conn = modificar_client
     conn.fetchval.side_effect = RuntimeError("db caida")
 
@@ -82,4 +83,20 @@ def test_modificar_persona_error_db_devuelve_500(modificar_client):
     )
 
     assert resp.status_code == 500
-    assert "db caida" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert "db caida" not in detail
+    assert "error interno" in detail.lower()
+
+
+def test_modificar_persona_db_caida_devuelve_503(modificar_client):
+    """BD inaccesible → 503 con mensaje amigable."""
+    client, conn = modificar_client
+    conn.fetchval.side_effect = ConnectionError("refused")
+
+    resp = client.patch(
+        "/api/personas/1234567890",
+        json={"correo": "x@y.co"},
+    )
+
+    assert resp.status_code == 503
+    assert "base de datos" in resp.json()["detail"].lower()
