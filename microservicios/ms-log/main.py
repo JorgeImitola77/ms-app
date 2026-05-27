@@ -63,6 +63,11 @@ async def consultar_logs(
         # Convertimos los 'Records' de asyncpg a diccionarios de Python
         return [dict(r) for r in registros]
 
+    except HTTPException:
+        # Errores de validación (p. ej. 400 por fecha inválida) deben
+        # propagarse tal cual; sin esta rama, el except genérico los
+        # envolvía como 500.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

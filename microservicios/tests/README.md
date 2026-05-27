@@ -143,38 +143,31 @@ ejecuta automáticamente desde el fixture `*_client`.
 | `celular` 10 dígitos exactos | ✅ 10 dígitos | ✅ 9, 11, con guion, letras, vacío |
 | `fecha_nacimiento` date | ✅ ISO 8601 | ✅ DD-MM-YYYY |
 
-## Bugs detectados durante el testing
+## Bugs detectados y corregidos en este card
 
-### ms-log: validación de fecha mal capturada
+Estos dos defectos salieron a la luz al escribir los tests y se
+corrigieron en el mismo commit:
 
-En `ms-log/main.py`, el bloque que parsea el filtro `fecha`:
+### ms-log: validación de fecha que terminaba en 500
 
-```python
-try:
-    query = ...                         # outer try
-    ...
-    if fecha:
-        try:
-            fecha_obj = date.fromisoformat(fecha)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de fecha inválido...")
-    ...
-except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))  # ← se traga el 400
-```
+`GET /api/logs?fecha=15-01-2025` retornaba `500 Internal Server Error`
+con detalle `"400: Formato de fecha inválido. Usa YYYY-MM-DD."` porque
+el `except Exception` exterior se tragaba la `HTTPException(400)` que el
+mismo handler lanzaba para la fecha mal formada.
 
-El `except Exception` exterior captura la `HTTPException(400)` y la
-re-lanza como **500** con detalle `"400: Formato de fecha inválido. Usa
-YYYY-MM-DD."`. El test `test_logs_fecha_invalida_se_propaga_como_error`
-afirma este comportamiento real. La corrección (en otro card) es añadir
-`except HTTPException: raise` **antes** del catch genérico, como ya hacen
-los demás microservicios (`ms-borrar`, `ms-consultar`, `ms-modificar`).
+**Fix (`ms-log/main.py`):** se agregó `except HTTPException: raise` antes
+del catch genérico, igual que en los demás microservicios. Ahora la
+respuesta es `400` con el mensaje correcto. Test:
+`test_logs_fecha_invalida_devuelve_400`.
 
-### ms-crear: documento duplicado devuelve 400 en vez de 409
+### ms-crear: documento duplicado retornaba 400 en lugar de 409
 
 El card 86e19rzwg pide explícitamente `409 por duplicado`. El handler
-hoy responde con `400` al capturar `asyncpg.UniqueViolationError`. El
-test `test_crear_persona_documento_duplicado_devuelve_400` afirma lo
-que el código hace hoy. Sugerencia: cambiar el código a
-`HTTPException(409, ...)` para alinear con el card y con la convención
-REST.
+respondía `400` al capturar `asyncpg.UniqueViolationError`, lo cual
+viola la convención REST (409 Conflict es el código adecuado para
+recursos duplicados).
+
+**Fix (`ms-crear/main.py`):** se cambió a `HTTPException(status_code=409,
+...)` y se añadió un `except HTTPException: raise` para no envolver
+errores de validación interna (p. ej. foto > 2 MB) como 500. Test:
+`test_crear_persona_documento_duplicado_devuelve_409`.

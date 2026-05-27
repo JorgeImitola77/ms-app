@@ -102,7 +102,11 @@ async def crear_persona(
         return {"status": "success", "message": "Persona registrada exitosamente"}
         
     except asyncpg.exceptions.UniqueViolationError:
-        raise HTTPException(status_code=400, detail="El número de documento ya se encuentra registrado")
+        # 409 Conflict es el código REST correcto para recursos duplicados.
+        raise HTTPException(status_code=409, detail="El número de documento ya se encuentra registrado")
+    except HTTPException:
+        # Validaciones internas (p. ej. foto > 2MB) deben mantener su status.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

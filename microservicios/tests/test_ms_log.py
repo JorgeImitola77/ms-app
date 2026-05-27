@@ -92,19 +92,15 @@ def test_logs_combina_varios_filtros(log_client):
     assert "DATE(fecha_transaccion) = $3" in sql
 
 
-def test_logs_fecha_invalida_se_propaga_como_error(log_client):
-    """Comportamiento real (documentado en README_tests.md, sección
-    'Bugs detectados'): el handler envuelve la ``HTTPException(400)`` que él
-    mismo lanza con el ``except Exception`` exterior y termina retornando 500
-    con el mensaje ``'400: Formato de fecha inválido. Usa YYYY-MM-DD.'``.
-    Aquí afirmamos lo que el código hace hoy; cuando se corrija (añadiendo
-    ``except HTTPException: raise`` antes del catch genérico) este test
-    cambiará a ``assert resp.status_code == 400``."""
+def test_logs_fecha_invalida_devuelve_400(log_client):
+    """Validación: una fecha con formato distinto a YYYY-MM-DD debe devolver
+    400 (no 500). El handler tiene un ``except HTTPException: raise`` antes
+    del catch genérico para que esta validación propague intacta."""
     client, _ = log_client
 
     resp = client.get("/api/logs", params={"fecha": "15-01-2025"})
 
-    assert resp.status_code == 500
+    assert resp.status_code == 400
     assert "YYYY-MM-DD" in resp.json()["detail"]
 
 

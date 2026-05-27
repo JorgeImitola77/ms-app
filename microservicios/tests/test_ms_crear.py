@@ -6,9 +6,8 @@ Casos cubiertos (alineados con el card 86e19rzwg):
 - 201 — creación exitosa con todos los campos obligatorios.
 - 201 — auto-registro del usuario nuevo en la tabla ``usuarios``.
 - 422 — FastAPI valida los ``Form(...)`` obligatorios faltantes.
-- 400 — ``UniqueViolationError`` cuando el documento ya existe en la BD.
-  (El card pide 409; el código actual devuelve 400 — se documenta en el
-  README de tests. Aquí afirmamos el comportamiento real.)
+- 409 — ``UniqueViolationError`` cuando el documento ya existe en la BD
+  (código REST correcto para conflicto de recurso duplicado).
 - 500 — error genérico en la BD se traduce a 500.
 """
 from __future__ import annotations
@@ -73,10 +72,10 @@ def test_crear_persona_422_falta_campo_obligatorio(crear_client):
     assert any("celular" in str(err) for err in resp.json()["detail"])
 
 
-def test_crear_persona_documento_duplicado_devuelve_400(crear_client):
-    """El card 86e19rzwg pide 409; el código real devuelve 400 al capturar
-    ``UniqueViolationError``. Verificamos el comportamiento actual y el
-    README explica la discrepancia para una futura corrección."""
+def test_crear_persona_documento_duplicado_devuelve_409(crear_client):
+    """El handler captura ``UniqueViolationError`` y devuelve 409 Conflict,
+    el código REST correcto para recursos duplicados (alineado con el card
+    86e19rzwg)."""
     client, conn = crear_client
     conn.fetchrow.return_value = {
         "usuario_id": "11111111-1111-1111-1111-111111111111",
@@ -88,7 +87,7 @@ def test_crear_persona_documento_duplicado_devuelve_400(crear_client):
 
     resp = client.post("/api/personas", data=_form_persona())
 
-    assert resp.status_code == 400
+    assert resp.status_code == 409
     assert "ya se encuentra registrado" in resp.json()["detail"]
 
 
